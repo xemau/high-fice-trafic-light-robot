@@ -20,7 +20,8 @@ bool Esp32Uart::write(const uint8_t* bytes, std::size_t size) {
 }
 
 bool Ws2812Pixels::begin() {
-    strip_.updateType(NEO_GRB + NEO_KHZ800);
+    constexpr neoPixelType orders[] = {NEO_GRB, NEO_RGB, NEO_BRG, NEO_BGR, NEO_RBG, NEO_GBR};
+    strip_.updateType(orders[static_cast<unsigned>(Config::LedColorOrder)] + NEO_KHZ800);
     strip_.updateLength(Config::LedCount);
     if (!strip_.getPixels()) return false;
     strip_.setPin(Config::Pins::LedData);

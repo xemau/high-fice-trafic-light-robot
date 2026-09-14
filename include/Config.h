@@ -22,6 +22,8 @@ constexpr std::size_t LedCount = 3;
 struct Group { std::size_t first; std::size_t count; };
 constexpr std::array<Group, 3> Lamps{{{0, 1}, {1, 1}, {2, 1}}};
 constexpr uint8_t Brightness = 48;
+enum class ColorOrder { GRB, RGB, BRG, BGR, RBG, GBR };
+constexpr ColorOrder LedColorOrder = ColorOrder::GRB;
 constexpr uint32_t RedMs = 3000;
 constexpr uint32_t YellowMs = 1000;
 constexpr uint32_t RewardMs = 10000;
@@ -47,6 +49,7 @@ static_assert(DEFAULT_APP_MODE >= 1 && DEFAULT_APP_MODE <= 5, "DEFAULT_APP_MODE 
 static_assert(DefaultVolume >= 0 && DefaultVolume <= MaxVolume);
 static_assert(RewardTrack >= 1 && RewardTrack <= MaxTrack);
 static_assert(AnimationMs > 0 && LightCycleMs > 0);
+static_assert(LedCount > 0 && LedCount <= 65535 / 3, "RGB pixel buffer must fit the driver's 16-bit byte count");
 constexpr bool validLayout() {
     for (std::size_t i = 0; i < Lamps.size(); ++i) {
         const auto a = Lamps[i];
