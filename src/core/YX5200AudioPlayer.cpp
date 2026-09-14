@@ -133,7 +133,8 @@ void YX5200AudioPlayer::update() {
         return;
     }
     if (!elapsed(now, lastSent_, Config::AudioCommandMs)) return;
-    if (!awaitingStatus_ && elapsed(now, queriedAt_, Config::AudioPollMs)) {
+    const bool stopping = count_ && queue_[head_].command == 0x16;
+    if (!stopping && !awaitingStatus_ && elapsed(now, queriedAt_, Config::AudioPollMs)) {
         if (send(0x42)) {
             awaitingStatus_ = true;
             queriedAt_ = now;
