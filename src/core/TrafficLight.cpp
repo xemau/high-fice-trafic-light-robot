@@ -3,16 +3,9 @@
 
 bool TrafficLight::begin() {
     active_ = false;
+    animating_ = false;
     if (!interval_) return false;
-    for (std::size_t i = 0; i < groups_.size(); ++i) {
-        const auto a = groups_[i];
-        if (!a.count || a.first >= pixels_.size() || a.count > pixels_.size() - a.first) return false;
-        for (std::size_t j = 0; j < i; ++j) {
-            const auto b = groups_[j];
-            if (a.first < b.first + b.count && b.first < a.first + a.count) return false;
-        }
-    }
-    active_ = pixels_.begin();
+    active_ = outputs_.begin();
     show(Lamp::Off);
     return active_;
 }
@@ -20,14 +13,7 @@ bool TrafficLight::begin() {
 void TrafficLight::show(Lamp lamp) {
     animating_ = false;
     if (!active_) return;
-    for (std::size_t i = 0; i < pixels_.size(); ++i) pixels_.set(i, {0, 0, 0});
-    const auto index = static_cast<std::size_t>(lamp);
-    if (index < groups_.size()) {
-        constexpr Color colors[] = {{255, 0, 0}, {255, 160, 0}, {0, 255, 0}};
-        const auto group = groups_[index];
-        for (std::size_t i = group.first; i < group.first + group.count; ++i) pixels_.set(i, colors[index]);
-    }
-    pixels_.show();
+    outputs_.write(lamp == Lamp::Red, lamp == Lamp::Yellow, lamp == Lamp::Green);
 }
 
 void TrafficLight::startAnimation() {
@@ -49,7 +35,5 @@ void TrafficLight::updateAnimation() {
 }
 
 void TrafficLight::renderAnimation() {
-    constexpr Color colors[] = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}};
-    for (std::size_t i = 0; i < pixels_.size(); ++i) pixels_.set(i, colors[(i + phase_) % 3]);
-    pixels_.show();
+    outputs_.write(phase_ == 0, phase_ == 1, phase_ == 2);
 }

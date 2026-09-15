@@ -156,7 +156,7 @@ void DiagnosticController::command(Command cmd) {
             cycledAt_ = clock_.now();
             lights_.show(Lamp::Red);
         } else lights_.startAnimation();
-        log_.log(cycle_ ? "[LIGHTS] cycle" : "[LIGHTS] RGB dance");
+        log_.log(cycle_ ? "[LIGHTS] cycle" : "[LIGHTS] LED chase");
         return;
     }
     if (audioMode()) {

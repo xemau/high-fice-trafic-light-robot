@@ -8,7 +8,7 @@ Status: **not yet performed on physical hardware**. Native tests and a successfu
 | Firmware commit | Pending |
 | ESP32 carrier model and USB/5V power-path verification | Pending |
 | YX5200 module marking / card format | Pending |
-| LED part / count / group configuration | Pending |
+| Red/yellow/green LED parts, series resistors and GPIO18/19/23 wiring | Pending |
 | PAM8610 board and speaker markings | Pending |
 | Unloaded LM2596 output | Pending: target 5.0 V |
 | Loaded 5 V / 12 V, including loudest intended playback | Pending |
@@ -16,7 +16,7 @@ Status: **not yet performed on physical hardware**. Native tests and a successfu
 - [ ] Buck set and measured before attaching 5 V devices.
 - [ ] ESP32 USB-only boot, upload and serial menu.
 - [ ] SENSOR TEST: press/release, bounce, hold, second press, mounted hand.
-- [ ] LIGHTS TEST: all lamps, off, cycle and every pixel's RGB dance.
+- [ ] LIGHTS TEST: each individual lamp, off, cycle and one-at-a-time LED chase; verify current and polarity.
 - [ ] AUDIO TEST: verified UART initialization, play/pause/resume/stop, volume, next/previous.
 - [ ] Resistor-summed DAC audio through one amplifier channel produces clean sound.
 - [ ] No grounded speaker output, channel bridging, or YX5200 SPK-to-amplifier wiring.

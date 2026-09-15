@@ -59,15 +59,12 @@ struct FakeLights : ITrafficLight {
     void startAnimation() override { ++animations; dancing = true; }
     void updateAnimation() override { ++updates; }
 };
-struct FakePixels : IPixels {
-    explicit FakePixels(std::size_t count = Config::LedCount) : pixels(count) {}
+struct FakeLedOutputs : ILedOutputs {
     bool ok = true;
-    int begins = 0, shows = 0;
-    std::vector<Color> pixels;
+    int begins = 0, writes = 0;
+    bool red = false, yellow = false, green = false;
     bool begin() override { ++begins; return ok; }
-    std::size_t size() const override { return pixels.size(); }
-    void set(std::size_t index, Color color) override { pixels.at(index) = color; }
-    void show() override { ++shows; }
+    void write(bool r, bool y, bool g) override { ++writes; red = r; yellow = y; green = g; }
 };
 struct FakeUart : IUart {
     bool ok = true, writeOk = true;

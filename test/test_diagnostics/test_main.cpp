@@ -167,8 +167,8 @@ void virtual_audio_public_contract() {
     TEST_ASSERT_FALSE(audio.setVolume(-1)); TEST_ASSERT_FALSE(audio.setVolume(31));
 }
 void full_integration_with_real_core_and_fake_electrical_io() {
-    FakeClock clock; FakeInput input; FakeUart uart; FakePixels pixels; FakeLog log;
-    HighFiveSensor sensor(clock, input); TrafficLight lights(clock, pixels); YX5200AudioPlayer audio(clock, uart, log);
+    FakeClock clock; FakeInput input; FakeUart uart; FakeLedOutputs outputs; FakeLog log;
+    HighFiveSensor sensor(clock, input); TrafficLight lights(clock, outputs); YX5200AudioPlayer audio(clock, uart, log);
     DiagnosticController diagnostics(clock, sensor, audio, lights, log);
     diagnostics.begin(AppMode::Full);
     clock.advance(Config::AudioBootMs); diagnostics.update();
@@ -186,7 +186,7 @@ void full_integration_with_real_core_and_fake_electrical_io() {
     TEST_ASSERT_EQUAL_INT(RobotState::Red, diagnostics.robotState());
     clock.advance(Config::AudioCommandMs); diagnostics.update();
     TEST_ASSERT_EQUAL(0x16, uart.tx.back()[3]);
-    TEST_ASSERT_EQUAL(255, pixels.pixels[0].r); TEST_ASSERT_EQUAL(0, pixels.pixels[1].r);
+    TEST_ASSERT_TRUE(outputs.red); TEST_ASSERT_FALSE(outputs.yellow); TEST_ASSERT_FALSE(outputs.green);
 }
 void boot_sound_once_after_ready_and_diagnostic_system_commands() {
     Rig r; r.diagnostics.begin(AppMode::Full); r.audio.state = AudioStatus::Starting;

@@ -45,13 +45,10 @@ struct ITrafficLight {
     virtual void startAnimation() = 0;
     virtual void updateAnimation() = 0;
 };
-struct Color { uint8_t r, g, b; };
-struct IPixels {
-    virtual ~IPixels() = default;
+struct ILedOutputs {
+    virtual ~ILedOutputs() = default;
     virtual bool begin() = 0;
-    virtual std::size_t size() const = 0;
-    virtual void set(std::size_t index, Color color) = 0;
-    virtual void show() = 0;
+    virtual void write(bool red, bool yellow, bool green) = 0;
 };
 struct IUart {
     virtual ~IUart() = default;

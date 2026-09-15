@@ -2,7 +2,6 @@
 #include "Config.h"
 #include "interfaces/Interfaces.h"
 #include <Arduino.h>
-#include <Adafruit_NeoPixel.h>
 
 class Esp32Clock final : public IClock {
 public:
@@ -23,14 +22,10 @@ private:
     HardwareSerial serial_;
     bool active_ = false;
 };
-class Ws2812Pixels final : public IPixels {
+class Esp32LedOutputs final : public ILedOutputs {
 public:
     bool begin() override;
-    std::size_t size() const override { return Config::LedCount; }
-    void set(std::size_t index, Color color) override;
-    void show() override;
-private:
-    Adafruit_NeoPixel strip_;
+    void write(bool red, bool yellow, bool green) override;
 };
 class SerialConsole final : public ILogger {
 public:

@@ -10,9 +10,9 @@ struct Application {
     SerialConsole console;
     Esp32Input input;
     Esp32Uart uart;
-    Ws2812Pixels pixels;
+    Esp32LedOutputs ledOutputs;
     HighFiveSensor sensor{clock, input};
-    TrafficLight lights{clock, pixels};
+    TrafficLight lights{clock, ledOutputs};
     YX5200AudioPlayer audio{clock, uart, console};
     DiagnosticController diagnostics{clock, sensor, audio, lights, console};
     BootMenu menu{clock, diagnostics, console};

@@ -1,5 +1,6 @@
 #include "hardware/Esp32Adapters.h"
 #include <cstring>
+#include <initializer_list>
 
 bool Esp32Input::begin() {
     pinMode(Config::Pins::HighFive, INPUT_PULLUP);
@@ -19,18 +20,22 @@ bool Esp32Uart::write(const uint8_t* bytes, std::size_t size) {
     return serial_.write(bytes, size) == size;
 }
 
-bool Ws2812Pixels::begin() {
-    constexpr neoPixelType orders[] = {NEO_GRB, NEO_RGB, NEO_BRG, NEO_BGR, NEO_RBG, NEO_GBR};
-    strip_.updateType(orders[static_cast<unsigned>(Config::LedColorOrder)] + NEO_KHZ800);
-    strip_.updateLength(Config::LedCount);
-    if (!strip_.getPixels()) return false;
-    strip_.setPin(Config::Pins::LedData);
-    strip_.begin();
-    strip_.setBrightness(Config::Brightness);
+bool Esp32LedOutputs::begin() {
+    for (const auto pin : {Config::Pins::LedRed, Config::Pins::LedYellow, Config::Pins::LedGreen}) {
+        digitalWrite(pin, LOW);
+        pinMode(pin, OUTPUT);
+    }
     return true;
 }
-void Ws2812Pixels::set(std::size_t index, Color color) { strip_.setPixelColor(index, color.r, color.g, color.b); }
-void Ws2812Pixels::show() { strip_.show(); }
+void Esp32LedOutputs::write(bool red, bool yellow, bool green) {
+    // Turn off the previous lamp before enabling the next one.
+    digitalWrite(Config::Pins::LedRed, LOW);
+    digitalWrite(Config::Pins::LedYellow, LOW);
+    digitalWrite(Config::Pins::LedGreen, LOW);
+    if (red) digitalWrite(Config::Pins::LedRed, HIGH);
+    if (yellow) digitalWrite(Config::Pins::LedYellow, HIGH);
+    if (green) digitalWrite(Config::Pins::LedGreen, HIGH);
+}
 
 void SerialConsole::begin() { Serial.begin(Config::SerialBaud); }
 int SerialConsole::read() { return Serial.read(); }
