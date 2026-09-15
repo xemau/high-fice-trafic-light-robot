@@ -1,6 +1,6 @@
 # High-Five Traffic-Light Robot
 
-PlatformIO / Arduino / C++17 firmware for the existing **ESP32-WROOM-32D development board** and **three standard LEDs: one red, one yellow, one green**. The robot displays red for 3 seconds, yellow for 1 second, then waits on green for a debounced high-five. A high-five starts `/MP3/0001.mp3` and a three-LED chase for 10 seconds, then stops audio and returns to red.
+PlatformIO / Arduino / C++17 firmware for the existing **ESP32-WROOM-32D development board** and **three standard LEDs: one red, one yellow, one green**. The robot displays red for 3 seconds, yellow for 1 second, then waits on green for a debounced high-five. A high-five starts `/MP3/0001.mp3` and a three-LED chase for 30 seconds, then stops audio and returns to red.
 
 The ESP32 controls a **YX5200 Mini MP3 module** over UART2; the YX5200 decodes the audio. Its DAC outputs feed one PAM8610 amplifier channel and the existing 4 Ω speaker. No additional microcontroller or replacement MP3 module is needed.
 
@@ -186,7 +186,7 @@ SD root/
 
 To update an already prepared card, repeat the import command with `--replace` and the **entire desired music collection**. Replacement verifies the existing manifest and hashes, preserves unrelated files, refuses collisions with unowned files, and removes obsolete generated tracks. Keep the card attached until verification completes; conversion occurs first, but copying multiple files is not a filesystem transaction. Retain source audio on the laptop so an interrupted write can be rebuilt. Do not drag arbitrary audio directly into MP3 and expect format conversion or ID assignment to happen on the module.
 
-For the current card, `high-enough.wav` is converted to reward track 1. The original source remains on the laptop. The default reward still stops after 10 seconds. See [the SD preparation record](docs/sd-card-preparation.md) for the prepared files.
+For the current card, `high-enough.wav` is converted to reward track 1. The original source remains on the laptop. The default reward still stops after 30 seconds. See [the SD preparation record](docs/sd-card-preparation.md) for the prepared files.
 
 The driver directly implements the YX5200/DFPlayer-compatible 10-byte protocol at 9600 baud, 8N1. DFRobot documentation is used as a **protocol reference**, not as a requirement to replace the existing YX5200. Module variants can differ; AUDIO TEST verifies the actual module. The checksum is the 16-bit two's complement of bytes 1–6 (version through parameter-low). For volume 15, the frame is `7E FF 06 06 00 00 0F FE E6 EF`. Some older manual examples contain inconsistent checksums; this implementation follows the algorithm and tests complete frames and corrupted/fragmented replies.
 
@@ -201,7 +201,7 @@ All tunable defaults are in [`include/Config.h`](include/Config.h): the three LE
 | High-five input | GPIO27 |
 | Serial / MP3 UART baud | 115200 / 9600 |
 | LED drive / chase frame interval | Active-high on/off / 80 ms |
-| Red / yellow / reward | 3000 / 1000 / 10000 ms |
+| Red / yellow / reward | 3000 / 1000 / 30000 ms |
 | Green | Wait indefinitely |
 | Debounce | 30 ms |
 | Reward / boot / error track | 1 / 2998 / 2999 |
@@ -231,7 +231,7 @@ scripts/               Native compiler/coverage integration
 
 Core code uses injected interfaces, fixed buffers and bounded queues, with no Arduino calls, exceptions, or dynamic allocation. Hardware startup may allocate UART buffers. Every duration check uses unsigned subtraction; service the loop regularly (well within the 32-bit millis wrap period, about 49.7 days). Long loop stalls advance at most one state per update, preserving a visible interval for each state. Animation skips missed frames without an unbounded catch-up loop.
 
-There are no application `delay()` calls or busy waits. Serial input, UART receive, and log transmission each have per-loop budgets. Logs use a bounded buffer, drop excess whole messages, and report overflow when the buffer drains. Each LED frame uses only GPIO writes; the 10-second reward animation does not block sensor or audio updates.
+There are no application `delay()` calls or busy waits. Serial input, UART receive, and log transmission each have per-loop budgets. Logs use a bounded buffer, drop excess whole messages, and report overflow when the buffer drains. Each LED frame uses only GPIO writes; the 30-second reward animation does not block sensor or audio updates.
 
 ## Automated tests and coverage
 
@@ -262,7 +262,7 @@ Make connections with power off. Use one stage at a time; a missing MP3 module m
 4. **LIGHTS TEST (`2`).** Connect GPIO18/19/23 through one resistor each to the red/yellow/green LED anodes; connect their cathodes to GND. Check each lamp, off, automatic cycle and `dance` (one lamp lit at a time in a repeating red → yellow → green chase). Sensor/MP3 are not required; LEDs can be tested with the ESP32 powered by USB alone.
 5. **YX5200 AUDIO TEST (`3`).** Insert the prepared card while unpowered; connect 5V/GND/UART. Leave amplifier/speaker disconnected initially. Wait for verified `[OK] YX5200`, then try `play 1`, `pause`, `resume`, `stop`, `volume 12`, and `status`. UART success alone does not establish audible output.
 6. **PAM8610 and speaker.** Power off, add resistor-summed DAC line audio to the left input and speaker across L+/L−. Power the amplifier from switched 12 V. Start its gain low. Repeat AUDIO TEST, listen for clean sound, and measure 5 V/12 V under playback load. Check for hot components or reset/brownout behavior. Never rewire speaker outputs while energized.
-7. **SEQUENCE TEST (`5`).** Verify red (3 s), yellow (1 s), green (indefinite), then `highfive` → reward (10 s) → red. This mode requires no physical peripheral and does not play actual audio or drive LEDs.
+7. **SEQUENCE TEST (`5`).** Verify red (3 s), yellow (1 s), green (indefinite), then `highfive` → reward (30 s) → red. This mode requires no physical peripheral and does not play actual audio or drive LEDs.
 8. **FULL (`1`).** Connect the tested components and use the physical hand. Verify music and dance start once on green, presses during red/yellow do not queue a reward, a held switch never retriggers, and a new press works on the next cycle. Disconnect/fix audio with power off and repeat to verify diagnostics and recovery. Test normal operation without a serial monitor.
 
 Record results, module markings/carrier model, measured voltage under load, and any configuration changes in [`docs/hardware-validation.md`](docs/hardware-validation.md). Do not mark electrical/audio checks passed based on unit tests.

@@ -26,6 +26,7 @@ void initial_red_and_inactive_update() {
     TEST_ASSERT_EQUAL(0, r.sensor.updates);
 }
 void red_and_yellow_boundaries() {
+    TEST_ASSERT_EQUAL_UINT32(3000, Config::RedMs);
     for (uint32_t delta : {0u, 1u}) {
         Rig r;
         r.clock.advance(Config::RedMs - 1); r.robot.update();
@@ -56,8 +57,9 @@ void early_events_are_consumed_not_deferred() {
     TEST_ASSERT_EQUAL(0, r.audio.plays);
 }
 void reward_once_then_red_at_boundary() {
-    for (uint32_t delta : {0u, 1u}) {
-        Rig r; r.reward();
+    TEST_ASSERT_EQUAL_UINT32(30000, Config::RewardMs);
+    for (uint32_t start : {0u, UINT32_MAX - 15000}) for (uint32_t delta : {0u, 1u}) {
+        Rig r; r.clock.time = start; r.reward();
         TEST_ASSERT_EQUAL_INT(RobotState::Reward, r.robot.state());
         TEST_ASSERT_EQUAL(Config::RewardTrack, r.audio.track);
         TEST_ASSERT_TRUE(r.lights.dancing);
@@ -67,6 +69,8 @@ void reward_once_then_red_at_boundary() {
         TEST_ASSERT_EQUAL(1, r.lights.animations);
         r.clock.advance(Config::RewardMs - 1); r.robot.update();
         TEST_ASSERT_EQUAL_INT(RobotState::Reward, r.robot.state());
+        TEST_ASSERT_EQUAL(0, r.audio.stops);
+        TEST_ASSERT_TRUE(r.lights.dancing);
         r.clock.advance(1 + delta); r.robot.update();
         TEST_ASSERT_EQUAL_INT(RobotState::Red, r.robot.state());
         TEST_ASSERT_EQUAL(1, r.audio.stops);

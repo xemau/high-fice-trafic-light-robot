@@ -178,11 +178,16 @@ void full_integration_with_real_core_and_fake_electrical_io() {
     TEST_ASSERT_EQUAL_INT(RobotState::GreenWaiting, diagnostics.robotState());
     input.level = false; diagnostics.update(); clock.advance(Config::DebounceMs); diagnostics.update();
     TEST_ASSERT_EQUAL_INT(RobotState::Reward, diagnostics.robotState());
+    const auto rewardStartedAt = clock.now();
     clock.advance(Config::AudioCommandMs); diagnostics.update();
     TEST_ASSERT_EQUAL(0x12, uart.tx.back()[3]); TEST_ASSERT_EQUAL(Config::RewardTrack, uart.tx.back()[6]);
-    for (int i = 0; i < 100; ++i) {
-        clock.advance(100); uart.respond(0x42, 0x0201); diagnostics.update();
+    while (clock.now() - rewardStartedAt < Config::RewardMs - 1) {
+        const auto remaining = Config::RewardMs - 1 - (clock.now() - rewardStartedAt);
+        clock.advance(remaining < 100 ? remaining : 100);
+        uart.respond(0x42, 0x0201); diagnostics.update();
+        TEST_ASSERT_EQUAL_INT(RobotState::Reward, diagnostics.robotState());
     }
+    clock.advance(1); diagnostics.update();
     TEST_ASSERT_EQUAL_INT(RobotState::Red, diagnostics.robotState());
     clock.advance(Config::AudioCommandMs); diagnostics.update();
     TEST_ASSERT_EQUAL(0x16, uart.tx.back()[3]);
