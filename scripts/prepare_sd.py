@@ -117,6 +117,14 @@ def existing_files(output, replace):
     return names
 
 
+def clean_metadata(output, names):
+    for name in names:
+        file = output / name
+        sidecar = file.with_name("._" + file.name)
+        if sidecar.is_file() and not sidecar.is_symlink():
+            sidecar.unlink()
+
+
 def prepare(output, boot, error, music=(), ffmpeg=None, convert_fn=convert, replace=False):
     output = Path(output).expanduser().absolute()
     if output.is_symlink():
@@ -173,6 +181,7 @@ def prepare(output, boot, error, music=(), ffmpeg=None, convert_fn=convert, repl
         for name in previous - current:
             (output / name).unlink()
         shutil.copyfile(staged / MANIFEST, output / MANIFEST)
+        clean_metadata(output, previous | current | {MANIFEST})
         verify(output, manifest)
     return manifest
 

@@ -35,13 +35,22 @@ void YX5200AudioPlayer::fail(const char* reason) {
     status_ = AudioStatus::Failed;
     count_ = 0;
     awaitingStatus_ = false;
+    errorEvent_ = true;
     log_.log(reason);
+}
+
+bool YX5200AudioPlayer::takeError() {
+    const bool event = errorEvent_;
+    errorEvent_ = false;
+    return event;
 }
 
 bool YX5200AudioPlayer::begin() {
     head_ = count_ = 0;
     initStep_ = 0;
     awaitingStatus_ = false;
+    errorEvent_ = false;
+    lastTrack_ = 0;
     parser_.reset();
     startedAt_ = lastSent_ = lastByte_ = clock_.now();
     status_ = AudioStatus::Starting;
@@ -60,6 +69,8 @@ bool YX5200AudioPlayer::send(uint8_t command, uint16_t parameter) {
         return false;
     }
     lastSent_ = clock_.now();
+    if (command == 0x12) lastTrack_ = parameter;
+    if (command == 0x16) lastTrack_ = 0;
     return true;
 }
 
@@ -89,8 +100,12 @@ bool YX5200AudioPlayer::setVolume(int volume) {
 void YX5200AudioPlayer::receive(const Mp3Frame& frame) {
     if (frame.command == 0x40) {
         char message[64];
-        std::snprintf(message, sizeof(message), "[ERROR] YX5200 module error %u (retry after repair)", frame.parameter);
-        fail(message);
+        std::snprintf(message, sizeof(message), "[ERROR] YX5200 module error %u", frame.parameter);
+        if (status_ == AudioStatus::Ready && (frame.parameter == 5 || frame.parameter == 6)) {
+            count_ = 0;
+            errorEvent_ = lastTrack_ != Config::ErrorTrack;
+            log_.log(message);
+        } else fail(message);
     } else if (frame.command == 0x3b && (frame.parameter & 2)) {
         fail("[ERROR] YX5200 SD card removed");
     } else if (status_ == AudioStatus::Starting && initStep_ == 5 &&

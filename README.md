@@ -6,7 +6,7 @@ The ESP32 controls a **YX5200 Mini MP3 module** over UART2; the YX5200 decodes t
 
 ## Status and verification
 
-The ESP32 firmware builds, and 42 native tests pass across six suites. A clean Apple Clang coverage run measured **100% core line coverage and 97.4% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
+The ESP32 firmware builds, and 46 native tests pass across six suites, plus 11 host tests for SD preparation and audio conversion. A clean Apple Clang coverage run measured **100% core line coverage and 97.6% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
 
 Physical commissioning is still required: no ESP32 USB device was available during implementation. Tests verify application behavior and protocol handling, not actual sound, wiring, switch mechanics, supply stability, or this particular YX5200 module's compatibility. Follow the staged bring-up checklist before installing the electronics in cardboard.
 
@@ -137,7 +137,7 @@ Reboot to select a different mode. A digit sent after selection is rejected; mod
 | --- | --- | --- | --- |
 | `1` | FULL | Sensor, LEDs, UART2 | Automatic red → yellow → green → high-five → reward → red |
 | `2` | LIGHTS TEST | LEDs only | Automatically cycles red, yellow, green, off every second. `red`, `yellow`, `green`, `off` hold a lamp. `cycle` restarts cycling. `dance` rotates RGB across **every** configured pixel |
-| `3` | AUDIO TEST | UART2 only | `play 1`, `play 2`, `stop`, `pause`, `resume`, `volume 15`, `volume 20`, `next`, `previous`, `retry` |
+| `3` | AUDIO TEST | UART2 only | `play 1`, `play 2`, `boot`, `error`, `stop`, `pause`, `resume`, `volume 15`, `volume 20`, `next`, `previous`, `retry` |
 | `4` | SENSOR TEST | GPIO27 only | Prints stable PRESSED/RELEASED transitions and a HIGH FIVE EVENT once per debounced press; no per-loop spam |
 | `5` | SEQUENCE TEST | None of the physical sensor/LED/audio devices | Runs the real RobotController with virtual hardware. Send `highfive` at green; inspect state and simulated audio logs |
 
@@ -149,21 +149,42 @@ Boot-held switches are displayed as pressed but generate no high-five until rele
 
 `begin()` starts asynchronous initialization, not a blocking success check. After a 3-second module settling period, the driver sends stop, select TF/SD, conservative volume, DAC enable, and a volume query, at least 200 ms apart. `[OK] YX5200` requires a valid checksummed volume reply matching the configured startup volume. A reply timeout produces `[ERROR] YX5200 initialization failed`; UART failure, SD removal, module errors, and runtime disconnects are also logged. FULL continues processing LEDs, sensor, timing, and diagnostics if audio fails.
 
-Runtime commands go into a fixed eight-entry queue and return success **only for acceptance**, not audible playback. Invalid volumes/tracks, failed/not-ready audio, and queue overflow return failure. Commands do not wait for ACKs. The driver parses error/finish notifications and polls status every 5 seconds with a 1.5-second response timeout. `status` reports cached driver health; there is no claim that the speaker is connected or that a file exists. Repair wiring/card issues and send `retry` to restart initialization. Commands received before audio is ready are rejected rather than replayed unexpectedly later. Stop discards pending playback and takes priority over health polling at the next permitted transmit slot.
+Runtime commands go into a fixed eight-entry queue and return success **only for acceptance**, not audible playback. Invalid volumes/tracks, failed/not-ready audio, and queue overflow return failure. Commands do not wait for ACKs. The driver parses error/finish notifications and polls status every 5 seconds with a 1.5-second response timeout. Missing-file/out-of-range replies (module errors 5/6) after initialization keep the link usable and raise a one-shot error event; other module errors fail the driver. `status` reports cached driver health; there is no claim that the speaker is connected or that a file exists. Repair wiring/card issues and send `retry` to restart initialization. Commands received before audio is ready are rejected rather than replayed unexpectedly later. Stop discards pending playback and takes priority over health polling at the next permitted transmit slot.
+
+FULL plays the boot sound once after audio becomes ready. A late startup never interrupts an active reward. Failed LED/sensor initialization, recoverable missing-track errors, and rejected diagnostic commands request the error sound when audio is available. AUDIO TEST accepts `boot` and `error` explicitly but does not play a boot cue automatically. An absent/broken MP3 module cannot emit an error sound; Serial remains the fallback. Failure to find the error cue itself is logged without recursively requesting it.
 
 ## SD-card layout and YX5200 compatibility
 
-Use a FAT16/FAT32 microSD card, up to 32 GB, with this exact layout:
+Use a FAT32 microSD card up to 32 GB with an MBR partition table. Run the importer with your **original filenames**; no manual renaming is needed:
+
+```sh
+python scripts/prepare_sd.py --output /Volumes/ROBOT \
+  --boot /path/to/boot.mp3 --error /path/to/error.mp3 \
+  --music '/path/to/My favourite song.wav' /path/to/more-music/
+```
+
+The importer accepts MP3, WAV, FLAC, M4A, OGG, WMA and other sources supported by the installed FFmpeg decoder. It converts them to metadata-free 44.1 kHz stereo, 128 kbps CBR MP3, checks that each output decodes, assigns IDs, and verifies copied hashes. It does not claim support for every possible codec, encrypted/DRM audio, or corrupt files. Unsupported sources fail before the destination is modified. It does not format disks.
+
+The YX5200 still requires numeric addressing for deterministic playback; it cannot open `/system/boot.mp3` by pathname through UART. The importer handles that hardware constraint, retaining original system files under `/system` and creating playback copies automatically:
 
 ```text
 SD root/
-└── MP3/
-    ├── 0001.mp3   # reward music
-    ├── 0002.mp3
-    └── ...
+├── system/
+│   ├── boot.mp3       # original supplied file
+│   └── error.mp3      # original supplied file
+├── MP3/
+│   ├── 0001.mp3       # first imported music file: high-five reward
+│   ├── ...
+│   ├── 2998.mp3       # prepared boot sound
+│   └── 2999.mp3       # prepared error sound
+└── audio-manifest.json # original names, IDs, file sizes and SHA-256 hashes
 ```
 
-`play 1` uses command **0x12 (MP3-folder addressing)** for `/MP3/0001.mp3`, not FAT copy-order track selection. Valid filenames are four decimal digits, 0001–9999. For bring-up, use a short known-good MP3 and just these two files; remove macOS `._` resource-fork files from the card if present. `next`/`previous` send the module's native navigation commands: their order depends on the module/card enumeration and is not a guaranteed numeric ordering within MP3. Use `play N` when deterministic addressing matters.
+`play 1` uses command **0x12 (MP3-folder addressing)** for `/MP3/0001.mp3`, not FAT copy-order track selection. Config.h reserves tracks 2998/2999 for boot/error and leaves 1–2997 for imported music. Explicit input order determines music IDs; folders are scanned in sorted path order. The first music file is the reward. `next`/`previous` use native card enumeration, which can include the original system copies and is not guaranteed to follow numeric ordering. Use `play N`, `boot`, or `error` for deterministic selection. The importer removes AppleDouble `._` metadata sidecars for generated files after copying. macOS can recreate them while the volume is mounted; safely eject the card after preparation.
+
+To update an already prepared card, repeat the import command with `--replace` and the **entire desired music collection**. Replacement verifies the existing manifest and hashes, preserves unrelated files, refuses collisions with unowned files, and removes obsolete generated tracks. Keep the card attached until verification completes; conversion occurs first, but copying multiple files is not a filesystem transaction. Retain source audio on the laptop so an interrupted write can be rebuilt. Do not drag arbitrary audio directly into MP3 and expect format conversion or ID assignment to happen on the module.
+
+For the current card, `high-enough.wav` is converted to reward track 1. The original source remains on the laptop. The default reward still stops after 10 seconds. See [the SD preparation record](docs/sd-card-preparation.md) for the prepared files.
 
 The driver directly implements the YX5200/DFPlayer-compatible 10-byte protocol at 9600 baud, 8N1. DFRobot documentation is used as a **protocol reference**, not as a requirement to replace the existing YX5200. Module variants can differ; AUDIO TEST verifies the actual module. The checksum is the 16-bit two's complement of bytes 1–6 (version through parameter-low). For volume 15, the frame is `7E FF 06 06 00 00 0F FE E6 EF`. Some older manual examples contain inconsistent checksums; this implementation follows the algorithm and tests complete frames and corrupted/fragmented replies.
 
@@ -181,7 +202,8 @@ All tunable defaults are in [`include/Config.h`](include/Config.h): GPIOs, UART 
 | Red / yellow / reward | 3000 / 1000 / 10000 ms |
 | Green | Wait indefinitely |
 | Debounce | 30 ms |
-| Reward track / initial volume | 1 / 12 (supported volume range 0–30) |
+| Reward / boot / error track | 1 / 2998 / 2999 |
+| Initial volume | 12 (supported volume range 0–30) |
 | Boot selection timeout / default | 5000 ms / FULL |
 
 To use twelve pixels, change `LedCount` to `12` and `Lamps` to `{{{0, 4}, {4, 4}, {8, 4}}}`. RobotController needs no changes. Layout validation rejects empty, overlapping, or out-of-bounds groups. Reassess supply current and wiring when adding pixels; low firmware brightness is not a substitute for a supply/wiring design that tolerates startup or faults.
@@ -217,6 +239,7 @@ With the development environment active:
 pio test -e native
 pio test -e native -f test_robot_controller
 python scripts/coverage.py
+python -m unittest discover -s test_host -v
 ```
 
 `coverage.py` cleans **only the native build**, runs all six suites, and creates `coverage/index.html`, `coverage/summary.json`, and `coverage/cobertura.xml`. It fails below **90% line or 90% branch coverage**. It measures `src/core/` and `include/core/`, including protocol and diagnostic implementations; Arduino adapters, third-party libraries, and the fakes/test assertions are outside the denominator. It does not exclude untested core branches to improve the score.
@@ -225,7 +248,7 @@ On Linux, the script uses GCC's `gcov`; on macOS it uses Apple Clang and `xcrun 
 
 The tests cover state transitions, −1/exact/+1 timing boundaries and rollover; early/held/repeated high-fives; actual debounce bounce sequences; grouped LED mapping/off/dance; fixed UART frames, fragmented/corrupt input, bounded RX, command pacing/queue overflow, initialization/runtime failures, volume limits and stop priority; malformed serial input, boot defaults, and strict mode isolation. An integration test runs the real controller, diagnostics, sensor, LED mapping and audio driver together through fake electrical IO.
 
-GitHub Actions runs native tests/coverage on Linux and macOS and builds the ESP32 firmware on Linux for pushes and pull requests. It publishes coverage reports and firmware binaries as workflow artifacts.
+GitHub Actions runs native tests/coverage and host importer/conversion tests on Linux and macOS and builds the ESP32 firmware on Linux for pushes and pull requests. It publishes coverage reports and firmware binaries as workflow artifacts. The importer tests include real WAV, MP3, FLAC and M4A conversion, arbitrary/Unicode filenames, read-back hashes, corrupt input, and safe library replacement.
 
 ## Hardware bring-up checklist
 
@@ -262,5 +285,6 @@ Record results, module markings/carrier model, measured voltage under load, and 
 - [Espressif ESP32-WROOM-32D/32U datasheet](https://documentation.espressif.com/esp32-wroom-32d_esp32-wroom-32u_datasheet_en.html): module pinout and electrical limits.
 - [PlatformIO esp32dev board](https://docs.platformio.org/en/stable/boards/espressif32/esp32dev.html): board target, build/upload configuration.
 - [DFRobot protocol implementation](https://github.com/DFRobot/DFRobotDFPlayerMini/blob/master/DFRobotDFPlayerMini.cpp) and [module reference](https://wiki.dfrobot.com/dfr0299/docs/20905): compatible UART command IDs, MP3-folder addressing and checksum algorithm. No DFRobot library is used by this firmware.
+- [YX5200 manufacturer's module manual](https://datasheet4u.com/pdf-down/Y/X/5/YX5200-24SS-YueXin.pdf): numeric addressing and module error responses. Arbitrary-path playback is not exposed by this UART protocol.
 - [Diodes PAM8610 datasheet](https://www.diodes.com/datasheet/download/PAM8610.pdf): supply, bridge outputs and load/power characteristics.
 - [gcovr documentation](https://www.gcovr.com/en/8.3/): coverage commands and compiler-specific data handling.

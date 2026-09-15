@@ -87,6 +87,16 @@ class PreparationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unmanaged path"):
             self.prepare(replace=True)
 
+    def test_metadata_cleanup_is_limited_to_generated_files(self):
+        self.prepare()
+        sidecar = self.output / "MP3/._2998.mp3"
+        unrelated = self.output / "MP3/._other.mp3"
+        sidecar.write_bytes(b"AppleDouble metadata")
+        unrelated.write_bytes(b"keep")
+        sd.clean_metadata(self.output, {"MP3/2998.mp3"})
+        self.assertFalse(sidecar.exists())
+        self.assertEqual(b"keep", unrelated.read_bytes())
+
     def test_output_symlink_and_sources_inside_destination_rejected(self):
         directory = self.root / "real-card"
         directory.mkdir()

@@ -53,7 +53,7 @@ Command parseCommand(const char* line) {
         {"stop", CommandType::Stop}, {"pause", CommandType::Pause}, {"resume", CommandType::Resume},
         {"next", CommandType::Next}, {"previous", CommandType::Previous}, {"highfive", CommandType::HighFive},
         {"status", CommandType::Status}, {"reset", CommandType::Reset}, {"help", CommandType::Help},
-        {"retry", CommandType::Retry}
+        {"retry", CommandType::Retry}, {"boot", CommandType::BootSound}, {"error", CommandType::ErrorSound}
     };
     for (const auto& word : words) if (equal(first, word.text)) return {word.type};
     return {};
