@@ -57,6 +57,7 @@ dkms.conf
 .pio-core/
 .venv/
 coverage/
+.dist/
 *.gcda
 *.gcno
 __pycache__/

@@ -33,6 +33,8 @@ constexpr uint32_t LightCycleMs = 1000;
 constexpr uint32_t SelectionMs = 5000;
 constexpr int DefaultVolume = 12;
 constexpr uint16_t RewardTrack = 1;
+constexpr uint16_t BootTrack = 2998;
+constexpr uint16_t ErrorTrack = 2999;
 constexpr int MaxVolume = 30;
 constexpr uint16_t MaxTrack = 9999;
 constexpr uint32_t AudioBootMs = 3000;
@@ -48,6 +50,8 @@ constexpr auto DefaultMode = static_cast<AppMode>(DEFAULT_APP_MODE);
 static_assert(DEFAULT_APP_MODE >= 1 && DEFAULT_APP_MODE <= 5, "DEFAULT_APP_MODE must be 1..5");
 static_assert(DefaultVolume >= 0 && DefaultVolume <= MaxVolume);
 static_assert(RewardTrack >= 1 && RewardTrack <= MaxTrack);
+static_assert(BootTrack > RewardTrack && ErrorTrack > RewardTrack && BootTrack != ErrorTrack);
+static_assert(BootTrack <= MaxTrack && ErrorTrack <= MaxTrack);
 static_assert(AnimationMs > 0 && LightCycleMs > 0);
 static_assert(LedCount > 0 && LedCount <= 65535 / 3, "RGB pixel buffer must fit the driver's 16-bit byte count");
 constexpr bool validLayout() {
