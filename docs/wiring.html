@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>High-Five Robot Wiring Diagram</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        padding: 30px;
+        font-family: Arial, Helvetica, sans-serif;
+        background: #f4f5f7;
+        color: #1d2329;
+    }
+
+    h1 {
+        margin-top: 0;
+        margin-bottom: 5px;
+    }
+
+    .subtitle {
+        color: #606870;
+        margin-bottom: 30px;
+    }
+
+    .diagram {
+        min-width: 1350px;
+    }
+
+    .scroll {
+        overflow-x: auto;
+        padding-bottom: 20px;
+    }
+
+    .section {
+        background: white;
+        border: 1px solid #d5d9de;
+        border-radius: 14px;
+        padding: 22px;
+        margin-bottom: 24px;
+    }
+
+    .section-title {
+        font-size: 22px;
+        font-weight: bold;
+        margin-bottom: 18px;
+    }
+
+    .row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .column {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .box {
+        border: 2px solid #7c858e;
+        border-radius: 12px;
+        background: #ffffff;
+        padding: 15px 20px;
+        min-width: 180px;
+        text-align: center;
+    }
+
+    .box strong {
+        display: block;
+        font-size: 18px;
+        margin-bottom: 6px;
+    }
+
+    .box small {
+        display: block;
+        color: #626b74;
+        line-height: 1.5;
+    }
+
+    .adapter {
+        min-width: 190px;
+    }
+
+    .esp32 {
+        min-width: 290px;
+        border-color: #275d91;
+    }
+
+    .amp {
+        border-color: #9a6424;
+    }
+
+    .mp3 {
+        border-color: #704d91;
+    }
+
+    .buck {
+        border-color: #29836d;
+    }
+
+    .sensor {
+        border-color: #555;
+    }
+
+    .speaker {
+        border-color: #9a6424;
+    }
+
+    .led-red {
+        border-color: #c23b3b;
+    }
+
+    .led-yellow {
+        border-color: #c09200;
+    }
+
+    .led-green {
+        border-color: #2f8a50;
+    }
+
+    .arrow {
+        font-size: 32px;
+        font-weight: bold;
+        min-width: 40px;
+        text-align: center;
+    }
+
+    .arrow-label {
+        font-size: 13px;
+        color: #555;
+        text-align: center;
+        line-height: 1.4;
+    }
+
+    .split {
+        font-size: 28px;
+        font-weight: bold;
+        padding: 5px;
+    }
+
+    .power12 {
+        color: #b44b28;
+    }
+
+    .power5 {
+        color: #16836d;
+    }
+
+    .power33 {
+        color: #3569a7;
+    }
+
+    .signal {
+        color: #704d91;
+    }
+
+    .ground {
+        color: #222;
+    }
+
+    .ground-bus {
+        margin-top: 25px;
+        border: 3px solid #222;
+        border-radius: 10px;
+        padding: 14px;
+        text-align: center;
+        background: #eceff1;
+        font-weight: bold;
+    }
+
+    .ground-items {
+        margin-top: 10px;
+        font-weight: normal;
+        font-size: 14px;
+        line-height: 1.8;
+    }
+
+    .vertical-arrow {
+        font-size: 28px;
+        text-align: center;
+        line-height: 1;
+    }
+
+    .led-container {
+        display: flex;
+        gap: 20px;
+    }
+
+    .resistor {
+        border: 1px dashed #777;
+        background: #faf7e8;
+        padding: 8px 12px;
+        border-radius: 6px;
+        text-align: center;
+        min-width: 90px;
+    }
+
+    .warning {
+        border-left: 5px solid #c4473d;
+        background: #fff5f4;
+        padding: 15px 20px;
+        margin-top: 20px;
+        border-radius: 6px;
+    }
+
+    .success {
+        border-left: 5px solid #27845e;
+        background: #f1faf5;
+        padding: 15px 20px;
+        margin-top: 20px;
+        border-radius: 6px;
+    }
+
+    .pin-table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 15px;
+    }
+
+    .pin-table th,
+    .pin-table td {
+        border: 1px solid #d2d6da;
+        padding: 10px;
+        text-align: left;
+    }
+
+    .pin-table th {
+        background: #eceff2;
+    }
+
+    code {
+        background: #edf0f2;
+        padding: 2px 5px;
+        border-radius: 4px;
+    }
+    .pair-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+        margin: 20px 0;
+    }
+
+    .pair-grid .box {
+        text-align: left;
+    }
+
+    .pair-grid .pin-table {
+        font-size: 15px;
+    }
+
+    .circuit {
+        background: #f4f6f8;
+        border: 1px solid #d5d9de;
+        border-radius: 10px;
+        padding: 20px;
+        overflow-x: auto;
+        line-height: 1.6;
+        font-size: 15px;
+    }
+
+    .section p, .section li {
+        line-height: 1.6;
+    }
+
+    .section h3 {
+        margin-top: 26px;
+    }
+
+    .pin-table caption {
+        text-align: left;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    @media print {
+        body { padding: 0; background: white; }
+        .diagram { min-width: 0; }
+        .scroll { overflow: visible; }
+        .row { flex-wrap: wrap; }
+        .pair-grid { grid-template-columns: 1fr; }
+        .box { break-inside: avoid; }
+        .circuit { white-space: pre-wrap; font-size: 12px; }
+        .pin-table tr { break-inside: avoid; }
+    }
+</style>
+</head>
+
+<body>
+
+<h1>High-Five Robot Wiring Diagram</h1>
+<div class="subtitle">
+    ESP32-WROOM-32D + YX5200 + PAM8610 + 6 common-anode RGB LEDs (3 pairs) + High-Five Endstop<br>
+    Wiring revision: 2026-09-16 · Matches the paired-RGB firmware configuration
+</div>
+
+<div class="scroll">
+<div class="diagram">
+
+    <!-- ====================================================== -->
+    <!-- MAIN POWER -->
+    <!-- ====================================================== -->
+
+    <div class="section">
+
+        <div class="section-title">
+            1. Main Power
+        </div>
+
+        <div class="row">
+
+            <div class="box adapter">
+                <strong>12V / 3A Adapter</strong>
+                <small>
+                    Plugs into wall<br>
+                    5.5 × 2.1 mm plug
+                </small>
+            </div>
+
+            <div class="arrow power12">
+                →
+            </div>
+
+            <div class="box">
+                <strong>Female DC Jack</strong>
+                <small>
+                    +12V wire<br>
+                    GND wire
+                </small>
+            </div>
+
+            <div>
+                <div class="arrow-label power12">
+                    +12V
+                </div>
+                <div class="arrow power12">
+                    →
+                </div>
+            </div>
+
+            <div class="box">
+                <strong>Rocker Switch</strong>
+                <small>
+                    Switch ONLY<br>
+                    the +12V wire
+                </small>
+            </div>
+
+            <div>
+                <div class="arrow-label power12">
+                    switched +12V
+                </div>
+                <div class="arrow power12">
+                    →
+                </div>
+            </div>
+
+            <div class="split">
+                Y
+            </div>
+
+            <div class="column">
+
+                <div class="box amp">
+                    <strong>PAM8610</strong>
+                    <small>
+                        +12V → VCC<br>
+                        GND → GND
+                    </small>
+                </div>
+
+                <div class="box buck">
+                    <strong>LM2596</strong>
+                    <small>
+                        +12V → IN+<br>
+                        GND → IN-
+                    </small>
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="ground-bus">
+
+            COMMON GROUND — separate branches to one distribution bus
+
+            <div class="ground-items">
+                Female DC jack GND
+                &nbsp; · &nbsp;
+                PAM8610 GND
+                &nbsp; · &nbsp;
+                LM2596 IN-
+                &nbsp; · &nbsp;
+                LM2596 OUT-
+                &nbsp; · &nbsp;
+                ESP32 GND
+                &nbsp; · &nbsp;
+                YX5200 GND
+                &nbsp; · &nbsp;
+                Endstop GND
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ====================================================== -->
+    <!-- 5V POWER -->
+    <!-- ====================================================== -->
+
+    <div class="section">
+
+        <div class="section-title">
+            2. LM2596 — Convert 12V → 5V
+        </div>
+
+        <div class="row">
+
+            <div class="box buck">
+                <strong>LM2596</strong>
+                <small>
+                    IN+ = 12V<br>
+                    IN- = GND
+                </small>
+            </div>
+
+            <div class="arrow">
+                →
+            </div>
+
+            <div class="box buck">
+                <strong>Adjust to 5.00V</strong>
+                <small>
+                    Multimeter:<br>
+                    red → OUT+<br>
+                    black → OUT-
+                </small>
+            </div>
+
+            <div class="arrow power5">
+                →
+            </div>
+
+            <div class="split">
+                Y
+            </div>
+
+            <div class="column">
+
+                <div class="box esp32">
+                    <strong>ESP32</strong>
+                    <small>
+                        LM2596 OUT+ → 5V pin<br>
+                        LM2596 OUT- → GND
+                    </small>
+                </div>
+
+                <div class="box mp3">
+                    <strong>YX5200</strong>
+                    <small>
+                        LM2596 OUT+ → VCC<br>
+                        LM2596 OUT- → GND
+                    </small>
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="warning">
+            <strong>Important:</strong>
+            Do not connect the ESP32 until you have measured the LM2596
+            output and adjusted it to approximately <strong>5.00 V</strong>.
+            The 5V connection is the carrier board input, never the WROOM module's 3V3 pin.
+            Never apply 12V to the ESP32, YX5200, sensor or LEDs.
+        </div>
+
+        <div class="warning">
+            <strong>USB programming:</strong> isolate the external ESP32 5V feed unless the
+            carrier's USB/backfeed protection is verified. Do not power it from USB and the
+            buck converter simultaneously with an unknown power path. Disconnect signals
+            to unpowered peripherals to avoid phantom powering.
+        </div>
+
+    </div>
+
+
+    <!-- ====================================================== -->
+    <!-- ESP32 -->
+    <!-- ====================================================== -->
+
+    <div class="section">
+
+        <div class="section-title">
+            3. ESP32 Connections
+        </div>
+
+        <div class="row">
+
+            <div class="box esp32">
+                <strong>ESP32-WROOM-32D</strong>
+
+                <small>
+                    GPIO17 = MP3 TX<br>
+                    GPIO16 = MP3 RX<br><br>
+
+                    Top pair R/G/B = 18 / 19 / 23<br>
+                    Middle pair R/G/B = 25 / 26 / 32<br>
+                    Bottom pair R/G/B = 33 / 21 / 22<br><br>
+                    3V3 = all 6 common anodes<br><br>
+
+                    GPIO27 = High-five sensor
+                </small>
+            </div>
+
+            <!-- UART -->
+
+            <div class="column">
+
+                <div class="row">
+
+                    <div>
+                        <div class="arrow-label signal">
+                            GPIO17 TX
+                        </div>
+
+                        <div class="arrow signal">
+                            →
+                        </div>
+
+                        <div class="arrow-label">
+                            YX5200 RX
+                        </div>
+                    </div>
+
+                    <div class="box mp3">
+                        <strong>YX5200</strong>
+                        <small>
+                            UART MP3 player<br>
+                            MicroSD card
+                        </small>
+                    </div>
+
+                </div>
+
+                <div class="row">
+
+                    <div class="arrow-label signal">
+                        GPIO16 RX
+                    </div>
+
+                    <div class="arrow signal">
+                        ←
+                    </div>
+
+                    <div class="arrow-label">
+                        YX5200 TX
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="success">
+            UART wires cross:
+            <strong>ESP32 TX → YX5200 RX</strong> and
+            <strong>ESP32 RX ← YX5200 TX</strong>.
+            UART2 runs at 9600 baud, 8N1; confirm the module TX is 3.3V logic.
+            GPIO labels are not physical header positions.
+        </div>
+        <div class="success">
+            <strong>GPIO budget:</strong> 9 LED controls + 2 UART pins + 1 sensor = 12 application GPIOs.
+            GPIO4, GPIO13 and GPIO14 remain unused output-capable candidates, subject to carrier wiring.
+            GPIO1/3 remain reserved for serial/programming. GPIO21/22 are used by LEDs, not I²C.
+            No expander or multiplexing is needed.
+        </div>
+
+    </div>
+
+
+    <!-- ====================================================== -->
+    <!-- LEDS -->
+    <!-- ====================================================== -->
+
+    <div class="section" id="rgb-wiring">
+        <div class="section-title">4. Six Common-Anode RGB LEDs — Three Pairs</div>
+        <p>Each traffic-light position contains two RGB LEDs. Both LEDs in a pair share the
+        three color controls and always show the same color. The three pairs stay independent:
+        <strong>9 GPIOs, not 18</strong>. During normal traffic operation, only the selected pair is lit.</p>
+
+        <div class="warning">
+            <strong>Common anode (CA): all six common legs connect to ESP32 3V3.</strong>
+            Never connect them to GND or to 5V in this direct-GPIO circuit.
+            Each color cathode goes through its own series resistor to its assigned GPIO.
+            <strong>GPIO LOW = channel on; GPIO HIGH = channel off.</strong>
+        </div>
+
+        <div class="pair-grid">
+            <div class="box led-red">
+                <strong>Top pair · LEDs 1–2</strong>
+                <small>Two common-anode RGB LEDs<br>Red channel on; green and blue off</small>
+                <table class="pin-table">
+                    <thead><tr><th scope="col">Cathode channel</th><th scope="col">GPIO</th></tr></thead>
+                    <tbody><tr><td>Red</td><td>18</td></tr><tr><td>Green</td><td>19</td></tr><tr><td>Blue</td><td>23</td></tr></tbody>
+                </table>
+                <p>Both common anodes → <strong>3V3</strong>.<br>
+                Six separate 470 Ω resistors per pair.</p>
+            </div>
+            <div class="box led-yellow">
+                <strong>Middle pair · LEDs 3–4</strong>
+                <small>Two common-anode RGB LEDs<br>Red + green on together to mix yellow; blue off</small>
+                <table class="pin-table">
+                    <thead><tr><th scope="col">Cathode channel</th><th scope="col">GPIO</th></tr></thead>
+                    <tbody><tr><td>Red</td><td>25</td></tr><tr><td>Green</td><td>26</td></tr><tr><td>Blue</td><td>32</td></tr></tbody>
+                </table>
+                <p>Both common anodes → <strong>3V3</strong>.<br>
+                Six separate 470 Ω resistors per pair.</p>
+            </div>
+            <div class="box led-green">
+                <strong>Bottom pair · LEDs 5–6</strong>
+                <small>Two common-anode RGB LEDs<br>Green channel on; red and blue off</small>
+                <table class="pin-table">
+                    <thead><tr><th scope="col">Cathode channel</th><th scope="col">GPIO</th></tr></thead>
+                    <tbody><tr><td>Red</td><td>33</td></tr><tr><td>Green</td><td>21</td></tr><tr><td>Blue</td><td>22</td></tr></tbody>
+                </table>
+                <p>Both common anodes → <strong>3V3</strong>.<br>
+                Six separate 470 Ω resistors per pair.</p>
+            </div>
+        </div>
+
+        <h3>One shared color channel — repeat for all nine GPIOs</h3>
+        <p>This example is the top pair's red channel. Each branch has its own resistor;
+        neither the two LED cathodes nor the two LEDs share one series resistor.</p>
+        <pre class="circuit" aria-label="Top red channel: two separately resisted LED branches share GPIO18">
+3V3 ── LED 1 common anode (+)
+          LED 1 RED cathode (−) ── 470 Ω ──┐
+                                         ├── GPIO18
+3V3 ── LED 2 common anode (+)              │
+          LED 2 RED cathode (−) ── 470 Ω ──┤
+                                         │
+3V3 ──────────────────────────── 10 kΩ ───┘
+                                pull-up
+        </pre>
+
+        <div class="success">
+            <strong>Parts count:</strong> 6 RGB LEDs, <strong>18 × 470 Ω series resistors</strong>
+            (one per physical LED/color channel), plus <strong>9 × 10 kΩ recommended pull-ups</strong>
+            (one per GPIO to 3V3). Pull-ups keep channels off before firmware initialization;
+            they do not replace the series resistors. All three R/G/B channels are connected.
+            Do not join color controls between different pairs.
+        </div>
+
+        <h3>Check the actual LED before connecting it</h3>
+        <p>Reported label: <code>LB E2-03-04-FCN RGB CA</code>. Common-anode type is confirmed,
+        but the exact datasheet and physical leg order are unverified. Identify the common and
+        R/G/B legs from its datasheet or a diode test; do not infer polarity or color order from
+        leg length alone.</p>
+        <p>470 Ω is a conservative starting value, not a verified part-specific specification.
+        For a 2.0V channel, ideal current is (3.3 − 2.0) / 470 ≈ 2.8mA per LED, or 5.6mA per
+        shared GPIO. Measure actual channel currents and check the carrier's 3.3V regulator
+        capacity. Red/green brightness balance determines the yellow hue; increase a channel's
+        resistor value if needed to reduce its brightness.</p>
+        <div class="warning">
+            Green/blue channels may be dim if their forward voltage is too close to 3.3V.
+            If a higher LED supply or more brightness is required, use suitable external
+            current-sinking drivers and revise this wiring.
+            <strong>Do not move the common anodes to 5V while the cathodes remain connected to ESP32 GPIOs.</strong>
+        </div>
+    </div>
+
+
+    <!-- ====================================================== -->
+    <!-- HIGH FIVE -->
+    <!-- ====================================================== -->
+
+    <div class="section">
+
+        <div class="section-title">
+            5. High-Five Sensor
+        </div>
+
+        <div class="row">
+
+            <div class="box esp32">
+                <strong>ESP32</strong>
+                <small>
+                    3V3<br>
+                    GPIO27<br>
+                    GND
+                </small>
+            </div>
+
+            <div class="arrow">
+                →
+            </div>
+
+            <div class="box sensor">
+                <strong>RAMPS Endstop</strong>
+
+                <small>
+                    VCC ← ESP32 3V3<br>
+                    SIGNAL → GPIO27<br>
+                    GND → common GND
+                </small>
+            </div>
+
+        </div>
+
+        <div class="success">
+            Endstop logic:
+            <strong>released = HIGH</strong>,
+            <strong>pressed = LOW</strong>.
+            Firmware uses INPUT_PULLUP and a 30ms debounce; a held switch does not retrigger.
+            Check the module's printed VCC/GND/SIGNAL labels rather than connector orientation.
+        </div>
+
+    </div>
+
+
+    <!-- ====================================================== -->
+    <!-- AUDIO -->
+    <!-- ====================================================== -->
+
+    <div class="section">
+
+        <div class="section-title">
+            6. Audio Signal
+        </div>
+
+        <div class="row">
+
+            <div class="box mp3">
+                <strong>YX5200</strong>
+
+                <small>
+                    DAC_L<br>
+                    DAC_R<br>
+                    GND
+                </small>
+            </div>
+
+            <div class="column">
+
+                <div class="row">
+
+                    <div>
+                        DAC_L
+                    </div>
+
+                    <div class="arrow">
+                        →
+                    </div>
+
+                    <div class="resistor">
+                        1 kΩ
+                    </div>
+
+                </div>
+
+                <div class="row">
+
+                    <div>
+                        DAC_R
+                    </div>
+
+                    <div class="arrow">
+                        →
+                    </div>
+
+                    <div class="resistor">
+                        1 kΩ
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="arrow">
+                ↘<br>↗
+            </div>
+
+            <div class="box">
+                <strong>Join Here</strong>
+                <small>
+                    mono audio signal
+                </small>
+            </div>
+
+            <div class="arrow">
+                →
+            </div>
+
+            <div class="box amp">
+                <strong>PAM8610</strong>
+
+                <small>
+                    mono signal → L input<br>
+                    YX5200 GND → input GND
+                </small>
+            </div>
+
+        </div>
+
+        <div class="warning">
+            Do <strong>not</strong> connect
+            <code>DAC_L</code> and <code>DAC_R</code>
+            directly together. Each passes through its own
+            <strong>1 kΩ resistor</strong> first.
+            Use the DAC line outputs, not YX5200 SPK+/SPK−. Start with low amplifier gain
+            and firmware volume 12.
+        </div>
+
+    </div>
+
+
+    <!-- ====================================================== -->
+    <!-- SPEAKER -->
+    <!-- ====================================================== -->
+
+    <div class="section">
+
+        <div class="section-title">
+            7. Amplifier → Speaker
+        </div>
+
+        <div class="row">
+
+            <div class="box amp">
+                <strong>PAM8610</strong>
+                <small>
+                    Left channel<br>
+                    L+ / L-
+                </small>
+            </div>
+
+            <div class="column">
+
+                <div>
+                    <strong>L+</strong> ───────────────→
+                </div>
+
+                <div>
+                    <strong>L-</strong> ───────────────→
+                </div>
+
+            </div>
+
+            <div class="box speaker">
+                <strong>4Ω / 15W Speaker</strong>
+
+                <small>
+                    L+ → speaker terminal 1<br>
+                    L- → speaker terminal 2
+                </small>
+            </div>
+
+        </div>
+
+        <div class="warning">
+            <strong>Neither speaker terminal connects to GND.</strong>
+            The speaker connects directly between
+            <code>PAM8610 L+</code> and <code>PAM8610 L-</code>.
+            Leave R+/R− unconnected; do not bridge amplifier channels.
+        </div>
+
+    </div>
+
+
+    <div class="section" id="operation">
+        <div class="section-title">8. Sequence and Prepared SD Card</div>
+        <p><strong>Red: 3 seconds → yellow: 1 second → green: wait for high-five →
+        reward music + RGB animation: 30 seconds → red.</strong></p>
+        <p>The reward timer starts at the high-five. At the deadline, firmware stops the animation
+        and queues an audio stop; audible timing includes UART/module latency. Manual AUDIO TEST
+        playback and boot/error sounds do not have this reward timeout. Animation rotates red,
+        green and blue across the three pairs every 80ms; both LEDs in each pair match.</p>
+        <table class="pin-table">
+            <caption>FAT32 / MBR card, volume ROBOT — inserted into the YX5200 while unpowered</caption>
+            <thead><tr><th scope="col">Sound</th><th scope="col">Playback file</th><th scope="col">Source / archive</th></tr></thead>
+            <tbody>
+                <tr><td>Temporary reward · track 1</td><td><code>/MP3/0001.mp3</code></td><td>Converted from high-enough.wav</td></tr>
+                <tr><td>Boot · track 2998</td><td><code>/MP3/2998.mp3</code></td><td>Original retained at <code>/system/boot.mp3</code></td></tr>
+                <tr><td>Error · track 2999</td><td><code>/MP3/2999.mp3</code></td><td>Original retained at <code>/system/error.mp3</code></td></tr>
+            </tbody>
+        </table>
+        <p>The importer accepts original filenames and converts supported audio to module-compatible MP3.
+        The YX5200 uses the numbered playback copies; it does not open arbitrary filenames or convert
+        audio itself. Changing the reward timer does not require trimming or recopying the SD audio.</p>
+    </div>
+
+    <div class="section" id="checks">
+        <div class="section-title">9. Power-Off Wiring and First-Test Checklist</div>
+        <ol>
+            <li>With peripherals disconnected, verify adapter polarity and set the buck to 5.00V.
+                Power off before making connections; never route amplifier power through a breadboard.</li>
+            <li>Flash the paired-RGB firmware. Use the verified USB/external-power arrangement;
+                old single-color firmware does not match this active-low nine-channel wiring.</li>
+            <li>Open the 115200-baud serial monitor and reset. Send a mode number followed by Enter
+                within 5 seconds; otherwise FULL starts automatically.</li>
+            <li>Choose <strong>2 — LIGHTS TEST</strong>: verify top red, middle yellow, bottom green,
+                <code>off</code>, <code>cycle</code>, and <code>dance</code>.
+                Check both LEDs in each pair, all nine channels, reset-off behavior, resistor
+                currents, yellow balance and blue/green brightness.</li>
+            <li>Choose <strong>4 — SENSOR TEST</strong>: confirm one event per press/release.
+                Choose <strong>3 — AUDIO TEST</strong>: verify initialization, then
+                <code>boot</code>, <code>error</code>, <code>play 1</code> and <code>stop</code>.</li>
+            <li>Reboot into <strong>1 — FULL</strong> and verify the 3s / 1s / high-five / 30s sequence.
+                Measure supply voltages under load and check for overheating, resets and loose joints.</li>
+        </ol>
+        <div class="warning">
+            <strong>Physical commissioning is still pending.</strong>
+            A successful build and automated tests do not verify the LED pinout, actual brightness,
+            audio output or power wiring. Use the README and hardware commissioning record for the full checks.
+        </div>
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- SUMMARY -->
+    <!-- ====================================================== -->
+
+    <div class="section">
+
+        <div class="section-title">
+            Final Connection Table
+        </div>
+
+        <table class="pin-table">
+
+            <thead>
+                <tr>
+                    <th>From</th>
+                    <th>To</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                <tr>
+                    <td>DC jack +12V</td>
+                    <td>Rocker switch terminal 1</td>
+                </tr>
+
+                <tr>
+                    <td>Rocker switch terminal 2</td>
+                    <td>LM2596 IN+ and PAM8610 VCC</td>
+                </tr>
+
+                <tr>
+                    <td>DC jack GND</td>
+                    <td>Common ground bus</td>
+                </tr>
+
+                <tr>
+                    <td>LM2596 IN-</td>
+                    <td>Common ground</td>
+                </tr>
+
+                <tr>
+                    <td>LM2596 OUT+</td>
+                    <td>ESP32 5V + YX5200 VCC</td>
+                </tr>
+
+                <tr>
+                    <td>LM2596 OUT-</td>
+                    <td>Common ground</td>
+                </tr>
+
+                <tr>
+                    <td>ESP32 GPIO17 TX</td>
+                    <td>YX5200 RX</td>
+                </tr>
+
+                <tr>
+                    <td>ESP32 GPIO16 RX</td>
+                    <td>YX5200 TX</td>
+                </tr>
+
+                <tr><td>ESP32 3V3</td><td>All six RGB common anodes (+); never GND or 5V</td></tr>
+                <tr><td>GPIO18</td><td>Top pair LEDs 1–2: two separate 470 Ω branches to their red cathodes</td></tr>
+                <tr><td>GPIO19</td><td>Top pair LEDs 1–2: two separate 470 Ω branches to their green cathodes</td></tr>
+                <tr><td>GPIO23</td><td>Top pair LEDs 1–2: two separate 470 Ω branches to their blue cathodes</td></tr>
+                <tr><td>GPIO25</td><td>Middle pair LEDs 3–4: two separate 470 Ω branches to their red cathodes</td></tr>
+                <tr><td>GPIO26</td><td>Middle pair LEDs 3–4: two separate 470 Ω branches to their green cathodes</td></tr>
+                <tr><td>GPIO32</td><td>Middle pair LEDs 3–4: two separate 470 Ω branches to their blue cathodes</td></tr>
+                <tr><td>GPIO33</td><td>Bottom pair LEDs 5–6: two separate 470 Ω branches to their red cathodes</td></tr>
+                <tr><td>GPIO21</td><td>Bottom pair LEDs 5–6: two separate 470 Ω branches to their green cathodes</td></tr>
+                <tr><td>GPIO22</td><td>Bottom pair LEDs 5–6: two separate 470 Ω branches to their blue cathodes</td></tr>
+                <tr><td>ESP32 3V3</td><td>One 10 kΩ pull-up to each of the nine RGB GPIOs (recommended)</td></tr>
+
+                <tr>
+                    <td>ESP32 3V3</td>
+                    <td>Endstop VCC</td>
+                </tr>
+
+                <tr>
+                    <td>ESP32 GPIO27</td>
+                    <td>Endstop SIGNAL</td>
+                </tr>
+
+                <tr>
+                    <td>Endstop GND</td>
+                    <td>Common ground</td>
+                </tr>
+
+                <tr>
+                    <td>YX5200 DAC_L</td>
+                    <td>1kΩ → PAM8610 L input</td>
+                </tr>
+
+                <tr>
+                    <td>YX5200 DAC_R</td>
+                    <td>1kΩ → same PAM8610 L input</td>
+                </tr>
+
+                <tr>
+                    <td>YX5200 GND</td>
+                    <td>PAM8610 audio input GND</td>
+                </tr>
+
+                <tr>
+                    <td>PAM8610 L+</td>
+                    <td>Speaker terminal 1</td>
+                </tr>
+
+                <tr>
+                    <td>PAM8610 L-</td>
+                    <td>Speaker terminal 2</td>
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+</div>
+
+</body>
+</html>

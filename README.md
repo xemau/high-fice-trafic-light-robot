@@ -33,6 +33,8 @@ No Arduino Uno, second ESP32, DFPlayer-branded replacement, DY-SV5W, different s
 
 ## Power and wiring
 
+For a standalone, offline-friendly visual guide, open [the wiring diagram](docs/wiring.html) in a browser. It includes the RGB pair pin map, individual resistor branches, power/audio connections and first-test checklist.
+
 **Never apply 12 V to the ESP32, YX5200, endstop, or LEDs. Adjust the disconnected LM2596 to 5.0 V with a multimeter before connecting any 5 V devices.** The 5V connection below is the carrier board's regulated-input pin, not the WROOM module's 3.3 V supply pin. All six LED common anodes connect to ESP32 3V3; their color cathodes connect through individual resistors to GPIOs that sink current. Never connect these common anodes to 5 V with this direct-GPIO circuit. Confirm the carrier's labels and pinout; WROOM-32D identifies the module, not the carrier's USB power circuit.
 
 ```text
