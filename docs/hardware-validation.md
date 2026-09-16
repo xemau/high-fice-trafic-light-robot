@@ -8,6 +8,7 @@ Status: **not yet performed on physical hardware**. Native tests and a successfu
 | Firmware commit | Pending |
 | ESP32 carrier model and USB/5V power-path verification | Pending |
 | YX5200 module marking / card format | Pending |
+| DB1 COM/1 → GND, NO/4 → GPIO27, NC/2 unused; no switch power wire | Pending: verify markings and power-off continuity |
 | Six common-anode RGB LEDs: actual leg order, forward voltages and channel currents | Pending; reported label LB E2-03-04-FCN RGB CA, exact datasheet unverified |
 | Three paired RGB outputs, 18 series resistors, nine pull-ups and 3V3 supply capacity | Pending; use README's nine-GPIO map |
 | PAM8610 board and speaker markings | Pending |
@@ -16,7 +17,7 @@ Status: **not yet performed on physical hardware**. Native tests and a successfu
 
 - [ ] Buck set and measured before attaching 5 V devices.
 - [ ] ESP32 USB-only boot, upload and serial menu.
-- [ ] SENSOR TEST: press/release, bounce, hold, second press, mounted hand.
+- [ ] SENSOR TEST: DB1 released HIGH / pressed LOW; repeated press/release, bounce, hold, second press, mounted hand; verify low-current contact reliability.
 - [ ] LIGHTS TEST: top red, middle red+green yellow, bottom green; only the selected pair lights.
 - [ ] Both LEDs of every pair match; dance cycles each pair through red, green and blue.
 - [ ] All channels off during reset and on `off`; verify resistor currents, mixed-yellow hue and blue/green brightness at 3.3 V.

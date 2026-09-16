@@ -297,7 +297,7 @@
 
 <h1>High-Five Robot Wiring Diagram</h1>
 <div class="subtitle">
-    ESP32-WROOM-32D + YX5200 + PAM8610 + 6 common-anode RGB LEDs (3 pairs) + High-Five Endstop<br>
+    ESP32-WROOM-32D + YX5200 + PAM8610 + 6 common-anode RGB LEDs (3 pairs) + Cherry DB1 Switch<br>
     Wiring revision: 2026-09-16 · Matches the paired-RGB firmware configuration
 </div>
 
@@ -405,7 +405,7 @@
                 &nbsp; · &nbsp;
                 YX5200 GND
                 &nbsp; · &nbsp;
-                Endstop GND
+                DB1 COM (terminal 1)
             </div>
 
         </div>
@@ -687,7 +687,7 @@
     <div class="section">
 
         <div class="section-title">
-            5. High-Five Sensor
+            5. High-Five Sensor — Cherry DB1 Mechanical Switch
         </div>
 
         <div class="row">
@@ -695,9 +695,9 @@
             <div class="box esp32">
                 <strong>ESP32</strong>
                 <small>
-                    3V3<br>
-                    GPIO27<br>
-                    GND
+                    GPIO27 (INPUT_PULLUP)<br>
+                    GND<br>
+                    No external 3V3 wire to switch
                 </small>
             </div>
 
@@ -706,12 +706,12 @@
             </div>
 
             <div class="box sensor">
-                <strong>RAMPS Endstop</strong>
+                <strong>Cherry DB1</strong>
 
                 <small>
-                    VCC ← ESP32 3V3<br>
-                    SIGNAL → GPIO27<br>
-                    GND → common GND
+                    COM / 1 → ESP32 GND<br>
+                    NO / 4 → GPIO27<br>
+                    NC / 2 → leave disconnected
                 </small>
             </div>
 
@@ -722,8 +722,35 @@
             <strong>released = HIGH</strong>,
             <strong>pressed = LOW</strong>.
             Firmware uses INPUT_PULLUP and a 30ms debounce; a held switch does not retrigger.
-            Check the module's printed VCC/GND/SIGNAL labels rather than connector orientation.
+            Pressing the switch closes COM–NO, connecting GPIO27 to GND.
+            The internal pull-up holds GPIO27 HIGH when released; no separate power wire is needed.
         </div>
+
+        <pre class="circuit" aria-label="DB1 normally open contact connects GPIO27 to ground when pressed">
+Inside ESP32:
+3V3 -- internal pull-up -- GPIO27 -- NO / 4   o/ o   COM / 1 -- GND
+                                      DB1 contact closes on press
+
+NC / 2: unused; insulate this terminal.
+        </pre>
+
+        <div class="warning">
+            <strong>No 3V3, 5V or 12V wire goes to the DB1 switch.</strong>
+            It is a bare mechanical contact, not a powered VCC/GND/SIGNAL module.
+            With COM connected to GND, connecting 3V3 to NC would short the supply while released.
+            Keep NC disconnected; using NC for the signal would reverse the current firmware's behavior.
+        </div>
+
+        <p>Use the molded COM/NO/NC or 1/4/2 markings, not a guessed left-to-right pin order.
+        With the switch disconnected and all power off, use continuity mode:
+        COM–NO is open when released and closed when pressed; COM–NC does the opposite.
+        Verify repeated presses in SENSOR TEST. The DB1's published power-switch ratings do not
+        by themselves guarantee reliable operation at the tiny GPIO pull-up current.</p>
+        <p>Sources:
+        <a href="https://www.neuhold-elektronik.at/media/6d/1b/17/1636722530/N4652_Datenblatt.pdf?ts=1636722530">Cherry DB-series datasheet</a>
+        (page 1 identifies NC, NO and Common) and
+        <a href="https://switches-sensors.zf.com/switches-lexicon/">ZF terminal definitions</a>
+        (COM = 1, NC = 2, NO = 4).</p>
 
     </div>
 
@@ -912,7 +939,8 @@
                 <code>off</code>, <code>cycle</code>, and <code>dance</code>.
                 Check both LEDs in each pair, all nine channels, reset-off behavior, resistor
                 currents, yellow balance and blue/green brightness.</li>
-            <li>Choose <strong>4 — SENSOR TEST</strong>: confirm one event per press/release.
+            <li>With power off, connect DB1 COM/1 to GND and NO/4 to GPIO27; leave NC/2 unused.
+                Choose <strong>4 — SENSOR TEST</strong>: confirm released HIGH, pressed LOW and one event per press/release.
                 Choose <strong>3 — AUDIO TEST</strong>: verify initialization, then
                 <code>boot</code>, <code>error</code>, <code>play 1</code> and <code>stop</code>.</li>
             <li>Reboot into <strong>1 — FULL</strong> and verify the 3s / 1s / high-five / 30s sequence.
@@ -999,18 +1027,18 @@
                 <tr><td>ESP32 3V3</td><td>One 10 kΩ pull-up to each of the nine RGB GPIOs (recommended)</td></tr>
 
                 <tr>
-                    <td>ESP32 3V3</td>
-                    <td>Endstop VCC</td>
+                    <td>DB1 COM / terminal 1</td>
+                    <td>ESP32 GND / common ground</td>
                 </tr>
 
                 <tr>
                     <td>ESP32 GPIO27</td>
-                    <td>Endstop SIGNAL</td>
+                    <td>DB1 NO / terminal 4</td>
                 </tr>
 
                 <tr>
-                    <td>Endstop GND</td>
-                    <td>Common ground</td>
+                    <td>DB1 NC / terminal 2</td>
+                    <td>Leave disconnected and insulated; no switch power connection</td>
                 </tr>
 
                 <tr>

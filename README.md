@@ -22,7 +22,7 @@ Physical commissioning is still required: no ESP32 USB device was available duri
 | 1 | 4 Ω / 15 W / 75 mm speaker |
 | 1 | Regulated, enclosed 12 V / 3 A wall adapter |
 | 1 each | 5.5×2.1 mm female DC jack/pigtail, DC-rated rocker switch, LM2596 adjustable buck converter |
-| 1 | RAMPS 1.4 mechanical endstop module |
+| 1 | Cherry DB1 mechanical microswitch (COM/NO/NC contacts; no powered endstop module) |
 | 6 | Four-leg common-anode RGB LEDs, reported label `LB E2-03-04-FCN RGB CA`; two per traffic-light position |
 | 2 | Approximately 1 kΩ resistors for analog mono summing |
 | 18 | LED current-limiting resistors, initially 470 Ω each: one per color channel per physical LED |
@@ -63,14 +63,14 @@ PSU negative -------- COMMON GROUND DISTRIBUTION BUS
                          |-- LM2596 IN- and OUT- (non-isolated converter)
                          |-- ESP32 GND
                          |-- YX5200 GND / amplifier input ground reference
-                         `-- Endstop GND
+                         `-- DB1 COM / terminal 1
 ```
 
 Use a soldered/perfboard ground bus, suitable connectors, or WAGO-style distribution. Run separate power/return branches to the amplifier and buck converter; keep heavy speaker/amplifier return currents out of the sensor and audio-signal return wiring. Do not daisy-chain device power or route amplifier power through a breadboard. Insulate joints and mount the amplifier/buck so they can dissipate heat away from cardboard.
 
 ### Complete connection table
 
-GPIO numbers are ESP32 GPIO labels, **not physical header positions**. Check silk-screen labels on the actual endstop and amplifier; connector orientation varies.
+GPIO numbers are ESP32 GPIO labels, **not physical header positions**. Check the molded contact labels on the DB1 and connector labels on the amplifier; physical orientation varies.
 
 | From | To | Notes |
 | --- | --- | --- |
@@ -79,11 +79,11 @@ GPIO numbers are ESP32 GPIO labels, **not physical header positions**. Check sil
 | PSU negative | Common GND bus | Positive supply is switched; ground stays common |
 | GND bus | PAM8610 power GND; LM2596 IN− and OUT− | Buck input/output grounds share the same system |
 | LM2596 OUT+ (5.0 V) | ESP32 carrier 5V; YX5200 VCC | Separate branches; never the ESP32 3V3 pin |
-| GND bus | ESP32 GND; YX5200 GND; endstop GND | Connect before applying signals; RGB common legs go to 3V3, not GND |
+| GND bus | ESP32 GND; YX5200 GND; DB1 COM / terminal 1 | Connect before applying signals; RGB common legs go to 3V3, not GND |
 | ESP32 GPIO17 / UART2 TX | YX5200 RX | ESP32 transmits; optional ~1 kΩ series resistor if UART noise warrants it |
 | YX5200 TX | ESP32 GPIO16 / UART2 RX | ESP32 receives, 9600 baud, 8N1; confirm module TX is 3.3 V logic |
-| ESP32 3V3 | Endstop VCC | Keep signal within ESP32's 3.3 V logic range |
-| Endstop SIGNAL | ESP32 GPIO27 | Active low; firmware enables input pull-up |
+| DB1 NO / terminal 4 | ESP32 GPIO27 | Normally open; pressing connects GPIO27 to GND via COM. Firmware enables input pull-up |
+| DB1 NC / terminal 2 | Leave disconnected and insulated | No 3V3, 5V or 12V connection to the switch |
 | ESP32 3V3 | Common anode (+) of all six RGB LEDs | Confirm the common leg from the LED's pinout or diode test |
 | RGB GPIOs in table below | Corresponding color cathodes through one 470 Ω resistor per LED/channel | LOW = on, HIGH = off; two separate resistor branches per GPIO |
 | ESP32 3V3 | 10 kΩ pull-up → each RGB GPIO | Nine recommended pull-ups; these do not replace the 18 LED series resistors |
@@ -94,6 +94,12 @@ GPIO numbers are ESP32 GPIO labels, **not physical header positions**. Check sil
 | PAM8610 L+ | Speaker + | Use one amplifier channel only |
 | PAM8610 L− | Speaker − | Both speaker terminals are driven; neither goes to GND |
 | PAM8610 R+ / R− | Leave unconnected | Do not bridge channels; terminate unused input only as board instructions specify |
+
+### DB1 high-five switch
+
+The Cherry DB1 is a bare mechanical switch, not a VCC/GND/SIGNAL module. Wire **COM (1) to GND**, **NO (4) to GPIO27**, and leave **NC (2) unused**. The ESP32's internal pull-up holds the input HIGH when released; pressing closes COM–NO and pulls it LOW. The current firmware already implements this polarity and 30 ms debounce, so no code change is required.
+
+Do not wire 3V3 to NC: with COM grounded, that would short the supply while released. The 3V3 LED supply is separate from the DB1 wiring. Identify contacts by markings or a power-off continuity test: COM–NO closes only when pressed, while COM–NC opens when pressed. Do not guess terminal position from a generic switch picture. Verify repeated presses; the published DB1 power-switch ratings alone do not guarantee contact reliability at GPIO pull-up currents.
 
 ### RGB pairs and GPIO budget
 
@@ -292,7 +298,7 @@ Make connections with power off. Use one stage at a time; a missing MP3 module m
 
 1. **Set LM2596 to 5.0 V.** Leave the ESP32, MP3 and LEDs disconnected. Apply the 12 V supply, verify jack polarity, set/measure buck output, then turn power off. Check the output again under load later.
 2. **Power ESP32 only.** Use USB with the external feed isolated as described above. Build/upload, open 115200-baud monitor, reset, verify the menu and boot timeout. Resolve USB/external power isolation before live externally powered tests.
-3. **SENSOR TEST (`4`).** Connect only endstop 3V3/GND/SIGNAL. Verify RELEASED → PRESSED + exactly one HIGH FIVE EVENT → RELEASED. Hold it for several seconds: no repeated events. Tap/bounce it and tune debounce only if needed.
+3. **SENSOR TEST (`4`).** With power off, wire DB1 COM/1 → GND and NO/4 → GPIO27; leave NC/2 disconnected. No switch power wire is needed. Verify RELEASED → PRESSED + exactly one HIGH FIVE EVENT → RELEASED. Hold it for several seconds: no repeated events. Test repeated presses and the mounted hand; tune debounce only if needed.
 4. **LIGHTS TEST (`2`).** First verify each LED's common-anode/R/G/B pinout. Connect all six common anodes to 3V3, and each color cathode through its own 470 Ω resistor to the GPIO in the pair table (18 series resistors total). Add the nine GPIO pull-ups. Check top red, middle mixed yellow, bottom green, off and cycle. With `dance`, every pair must show red, green and blue in turn, with both LEDs matching. Measure currents and check mixed-yellow visibility, blue/green brightness, and off behavior during reset. Sensor/MP3 are not required; use USB-only ESP32 power with the external feed isolated.
 5. **YX5200 AUDIO TEST (`3`).** Insert the prepared card while unpowered; connect 5V/GND/UART. Leave amplifier/speaker disconnected initially. Wait for verified `[OK] YX5200`, then try `play 1`, `pause`, `resume`, `stop`, `volume 12`, and `status`. UART success alone does not establish audible output.
 6. **PAM8610 and speaker.** Power off, add resistor-summed DAC line audio to the left input and speaker across L+/L−. Power the amplifier from switched 12 V. Start its gain low. Repeat AUDIO TEST, listen for clean sound, and measure 5 V/12 V under playback load. Check for hot components or reset/brownout behavior. Never rewire speaker outputs while energized.
@@ -311,13 +317,14 @@ Record results, module markings/carrier model, measured voltage under load, and 
 | Audio distortion | Lower MP3 volume and amplifier gain, check clipped source audio, resistor sum, supply sag, loose connections and board temperature. Do not expect clean continuous 15 W from the marketing label |
 | LED stays dark | LIGHTS TEST; common anode to 3V3, correct R/G/B cathode and individual resistor to GPIO. LOW lights the channel. Check forward voltage/headroom and both separate branches; never bypass a resistor or connect the LED common anode to 5 V in this circuit |
 | Wrong pair/color lights | Compare all nine R/G/B connections with the pair table and Config::Pins::LedRgb. Middle yellow requires both red and green, with blue off. Correct leg mapping before adjusting resistor balance; both LEDs in each pair should match |
-| Endstop always pressed/released | Check the module's labeled VCC/GND/SIGNAL and switch actuator; power at 3.3 V; measure released HIGH/pressed LOW; inspect connector reversal and switch contact selection. A disconnected input typically reads released through the pull-up |
+| Endstop always pressed/released | Check DB1 COM/1 → GND and NO/4 → GPIO27, with NC/2 unused and no switch power wire. Test contacts with power off; verify released HIGH/pressed LOW when powered. A disconnected input reads released through the pull-up. Using NC reverses the expected behavior |
 | ESP32 resets when audio gets loud | Measure 12 V and 5 V under load; inspect wire/connector resistance, ground distribution, buck thermal/current limits, amplifier gain and short circuits. Keep amplifier current off breadboards and ESP32 supply wiring |
 | Sensor or LEDs work but audio reports failure | Expected isolation: use the individual modes, repair audio, then `retry`. A sensor/LED initialization log verifies software setup, not external wiring |
 | Commands do nothing | Finish boot selection with Enter before timeout; check mode, lowercase syntax and `help`. Wait for audio ready. Reboot to change modes. Watch queue/full/input-overflow errors |
 
 ## References
 
+- [Cherry DB-series datasheet](https://www.neuhold-elektronik.at/media/6d/1b/17/1636722530/N4652_Datenblatt.pdf?ts=1636722530): mechanical switch and NC/NO/Common contact diagram on page 1. [ZF switch terminal definitions](https://switches-sensors.zf.com/switches-lexicon/): COM = 1, NC = 2, NO = 4; contact operation and low-current considerations.
 - [Espressif ESP32-WROOM-32D/32U datasheet](https://documentation.espressif.com/esp32-wroom-32d_esp32-wroom-32u_datasheet_en.html): module pinout and electrical limits.
 - [PlatformIO esp32dev board](https://docs.platformio.org/en/stable/boards/espressif32/esp32dev.html): board target, build/upload configuration.
 - [DFRobot protocol implementation](https://github.com/DFRobot/DFRobotDFPlayerMini/blob/master/DFRobotDFPlayerMini.cpp) and [module reference](https://wiki.dfrobot.com/dfr0299/docs/20905): compatible UART command IDs, MP3-folder addressing and checksum algorithm. No DFRobot library is used by this firmware.
