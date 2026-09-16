@@ -2,6 +2,8 @@
 
 PlatformIO / Arduino / C++17 firmware for the existing **ESP32-WROOM-32D development board** and **three standard LEDs: one red, one yellow, one green**. The robot displays red for 3 seconds, yellow for 1 second, then waits on green for a debounced high-five. A high-five starts `/MP3/0001.mp3` and a three-LED chase for 30 seconds, then stops audio and returns to red.
 
+The automatic red phase remains 3 seconds, below the 5-second maximum. The 30-second reward timer starts when the high-five triggers the reward, not when audible playback begins. At the deadline, firmware ends the chase and queues an audio stop; actual sound timing includes UART/module latency. This is a reward-phase limit, not a universal audio timeout: manual AUDIO TEST playback and boot/error sounds have no added 30-second cutoff.
+
 The ESP32 controls a **YX5200 Mini MP3 module** over UART2; the YX5200 decodes the audio. Its DAC outputs feed one PAM8610 amplifier channel and the existing 4 Ω speaker. No additional microcontroller or replacement MP3 module is needed.
 
 ## Status and verification
@@ -186,7 +188,7 @@ SD root/
 
 To update an already prepared card, repeat the import command with `--replace` and the **entire desired music collection**. Replacement verifies the existing manifest and hashes, preserves unrelated files, refuses collisions with unowned files, and removes obsolete generated tracks. Keep the card attached until verification completes; conversion occurs first, but copying multiple files is not a filesystem transaction. Retain source audio on the laptop so an interrupted write can be rebuilt. Do not drag arbitrary audio directly into MP3 and expect format conversion or ID assignment to happen on the module.
 
-For the current card, `high-enough.wav` is converted to reward track 1. The original source remains on the laptop. The default reward still stops after 30 seconds. See [the SD preparation record](docs/sd-card-preparation.md) for the prepared files.
+For the current card, `high-enough.wav` is converted to reward track 1. The original source remains on the laptop. The 30-second reward limit is enforced by firmware, so changing that duration does not require trimming the audio or preparing the card again. See [the SD preparation record](docs/sd-card-preparation.md) for the prepared files.
 
 The driver directly implements the YX5200/DFPlayer-compatible 10-byte protocol at 9600 baud, 8N1. DFRobot documentation is used as a **protocol reference**, not as a requirement to replace the existing YX5200. Module variants can differ; AUDIO TEST verifies the actual module. The checksum is the 16-bit two's complement of bytes 1–6 (version through parameter-low). For volume 15, the frame is `7E FF 06 06 00 00 0F FE E6 EF`. Some older manual examples contain inconsistent checksums; this implementation follows the algorithm and tests complete frames and corrupted/fragmented replies.
 
