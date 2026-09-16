@@ -25,7 +25,7 @@ private:
 class Esp32LedOutputs final : public ILedOutputs {
 public:
     bool begin() override;
-    void write(bool red, bool yellow, bool green) override;
+    void write(const LedFrame& frame) override;
 };
 class SerialConsole final : public ILogger {
 public:

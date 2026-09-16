@@ -191,7 +191,12 @@ void full_integration_with_real_core_and_fake_electrical_io() {
     TEST_ASSERT_EQUAL_INT(RobotState::Red, diagnostics.robotState());
     clock.advance(Config::AudioCommandMs); diagnostics.update();
     TEST_ASSERT_EQUAL(0x16, uart.tx.back()[3]);
-    TEST_ASSERT_TRUE(outputs.red); TEST_ASSERT_FALSE(outputs.yellow); TEST_ASSERT_FALSE(outputs.green);
+    TEST_ASSERT_TRUE(outputs.frame[0].red);
+    TEST_ASSERT_FALSE(outputs.frame[0].green); TEST_ASSERT_FALSE(outputs.frame[0].blue);
+    for (std::size_t i = 1; i < outputs.frame.size(); ++i) {
+        TEST_ASSERT_FALSE(outputs.frame[i].red);
+        TEST_ASSERT_FALSE(outputs.frame[i].green); TEST_ASSERT_FALSE(outputs.frame[i].blue);
+    }
 }
 void boot_sound_once_after_ready_and_diagnostic_system_commands() {
     Rig r; r.diagnostics.begin(AppMode::Full); r.audio.state = AudioStatus::Starting;

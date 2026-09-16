@@ -1,6 +1,5 @@
 #include "hardware/Esp32Adapters.h"
 #include <cstring>
-#include <initializer_list>
 
 bool Esp32Input::begin() {
     pinMode(Config::Pins::HighFive, INPUT_PULLUP);
@@ -21,20 +20,20 @@ bool Esp32Uart::write(const uint8_t* bytes, std::size_t size) {
 }
 
 bool Esp32LedOutputs::begin() {
-    for (const auto pin : {Config::Pins::LedRed, Config::Pins::LedYellow, Config::Pins::LedGreen}) {
-        digitalWrite(pin, LOW);
+    for (const auto& pair : Config::Pins::LedRgb) for (const auto pin : pair) {
+        digitalWrite(pin, HIGH);
         pinMode(pin, OUTPUT);
     }
     return true;
 }
-void Esp32LedOutputs::write(bool red, bool yellow, bool green) {
-    // Turn off the previous lamp before enabling the next one.
-    digitalWrite(Config::Pins::LedRed, LOW);
-    digitalWrite(Config::Pins::LedYellow, LOW);
-    digitalWrite(Config::Pins::LedGreen, LOW);
-    if (red) digitalWrite(Config::Pins::LedRed, HIGH);
-    if (yellow) digitalWrite(Config::Pins::LedYellow, HIGH);
-    if (green) digitalWrite(Config::Pins::LedGreen, HIGH);
+void Esp32LedOutputs::write(const LedFrame& frame) {
+    // Common-anode channels are active low; blank the old frame first.
+    for (const auto& pair : Config::Pins::LedRgb) for (const auto pin : pair) digitalWrite(pin, HIGH);
+    for (std::size_t i = 0; i < frame.size(); ++i) {
+        if (frame[i].red) digitalWrite(Config::Pins::LedRgb[i][0], LOW);
+        if (frame[i].green) digitalWrite(Config::Pins::LedRgb[i][1], LOW);
+        if (frame[i].blue) digitalWrite(Config::Pins::LedRgb[i][2], LOW);
+    }
 }
 
 void SerialConsole::begin() { Serial.begin(Config::SerialBaud); }

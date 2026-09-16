@@ -62,9 +62,9 @@ struct FakeLights : ITrafficLight {
 struct FakeLedOutputs : ILedOutputs {
     bool ok = true;
     int begins = 0, writes = 0;
-    bool red = false, yellow = false, green = false;
+    LedFrame frame{};
     bool begin() override { ++begins; return ok; }
-    void write(bool r, bool y, bool g) override { ++writes; red = r; yellow = y; green = g; }
+    void write(const LedFrame& value) override { ++writes; frame = value; }
 };
 struct FakeUart : IUart {
     bool ok = true, writeOk = true;

@@ -1,5 +1,6 @@
 #pragma once
 #include "AppMode.h"
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -11,9 +12,10 @@ namespace Config {
 namespace Pins {
 constexpr uint8_t Mp3Rx = 16; // ESP32 RX <- YX5200 TX
 constexpr uint8_t Mp3Tx = 17; // ESP32 TX -> YX5200 RX
-constexpr uint8_t LedRed = 18;
-constexpr uint8_t LedYellow = 19;
-constexpr uint8_t LedGreen = 23;
+// Rows: top, middle, bottom pairs. Columns: red, green, blue cathodes.
+constexpr std::array<std::array<uint8_t, 3>, 3> LedRgb{{
+    {{18, 19, 23}}, {{25, 26, 32}}, {{33, 21, 22}}
+}};
 constexpr uint8_t HighFive = 27;
 }
 constexpr uint32_t SerialBaud = 115200;
@@ -48,6 +50,16 @@ static_assert(RewardTrack >= 1 && RewardTrack <= MaxTrack);
 static_assert(BootTrack > RewardTrack && ErrorTrack > RewardTrack && BootTrack != ErrorTrack);
 static_assert(BootTrack <= MaxTrack && ErrorTrack <= MaxTrack);
 static_assert(AnimationMs > 0 && LightCycleMs > 0);
-static_assert(Pins::LedRed != Pins::LedYellow && Pins::LedRed != Pins::LedGreen &&
-              Pins::LedYellow != Pins::LedGreen, "Each LED needs a separate GPIO");
+constexpr bool validLedPins() {
+    constexpr std::array<uint8_t, 15> outputs{{4, 13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33}};
+    uint64_t used = (1ULL << Pins::Mp3Rx) | (1ULL << Pins::Mp3Tx) | (1ULL << Pins::HighFive);
+    for (const auto& pair : Pins::LedRgb) for (const auto pin : pair) {
+        bool valid = false;
+        for (const auto output : outputs) if (pin == output) valid = true;
+        if (!valid || (used & (1ULL << pin))) return false;
+        used |= 1ULL << pin;
+    }
+    return true;
+}
+static_assert(validLedPins(), "RGB channels need distinct non-strapping output GPIOs, separate from audio/sensor");
 }

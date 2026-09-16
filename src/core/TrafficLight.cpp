@@ -13,7 +13,11 @@ bool TrafficLight::begin() {
 void TrafficLight::show(Lamp lamp) {
     animating_ = false;
     if (!active_) return;
-    outputs_.write(lamp == Lamp::Red, lamp == Lamp::Yellow, lamp == Lamp::Green);
+    LedFrame frame{};
+    if (lamp == Lamp::Red) frame[0] = {true, false, false};
+    if (lamp == Lamp::Yellow) frame[1] = {true, true, false};
+    if (lamp == Lamp::Green) frame[2] = {false, true, false};
+    outputs_.write(frame);
 }
 
 void TrafficLight::startAnimation() {
@@ -35,5 +39,8 @@ void TrafficLight::updateAnimation() {
 }
 
 void TrafficLight::renderAnimation() {
-    outputs_.write(phase_ == 0, phase_ == 1, phase_ == 2);
+    constexpr RgbChannels colors[] = {{true, false, false}, {false, true, false}, {false, false, true}};
+    LedFrame frame{};
+    for (std::size_t i = 0; i < frame.size(); ++i) frame[i] = colors[(i + phase_) % 3];
+    outputs_.write(frame);
 }

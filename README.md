@@ -1,14 +1,14 @@
 # High-Five Traffic-Light Robot
 
-PlatformIO / Arduino / C++17 firmware for the existing **ESP32-WROOM-32D development board** and **three standard LEDs: one red, one yellow, one green**. The robot displays red for 3 seconds, yellow for 1 second, then waits on green for a debounced high-five. A high-five starts `/MP3/0001.mp3` and a three-LED chase for 30 seconds, then stops audio and returns to red.
+PlatformIO / Arduino / C++17 firmware for the existing **ESP32-WROOM-32D development board** and **six four-leg common-anode RGB LEDs, wired as three pairs: top, middle and bottom**. The robot displays red for 3 seconds, yellow for 1 second, then waits on green for a debounced high-five. A high-five starts `/MP3/0001.mp3` and a rotating RGB animation across the three pairs for 30 seconds, then stops audio and returns to red.
 
-The automatic red phase remains 3 seconds, below the 5-second maximum. The 30-second reward timer starts when the high-five triggers the reward, not when audible playback begins. At the deadline, firmware ends the chase and queues an audio stop; actual sound timing includes UART/module latency. This is a reward-phase limit, not a universal audio timeout: manual AUDIO TEST playback and boot/error sounds have no added 30-second cutoff.
+The automatic red phase remains 3 seconds, below the 5-second maximum. The 30-second reward timer starts when the high-five triggers the reward, not when audible playback begins. At the deadline, firmware ends the RGB animation and queues an audio stop; actual sound timing includes UART/module latency. This is a reward-phase limit, not a universal audio timeout: manual AUDIO TEST playback and boot/error sounds have no added 30-second cutoff.
 
 The ESP32 controls a **YX5200 Mini MP3 module** over UART2; the YX5200 decodes the audio. Its DAC outputs feed one PAM8610 amplifier channel and the existing 4 Ω speaker. No additional microcontroller or replacement MP3 module is needed.
 
 ## Status and verification
 
-The ESP32 firmware builds, and 46 native tests pass across six suites, plus 11 host tests for SD preparation and audio conversion. A clean Apple Clang coverage run measured **100% core line coverage and 97.7% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
+The ESP32 firmware builds, and 46 native tests pass across six suites, plus 12 host tests for SD preparation, audio conversion and GPIO output. A clean Apple Clang coverage run measured **100% core line coverage and 97.8% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
 
 Physical commissioning is still required: no ESP32 USB device was available during implementation. Tests verify application behavior and protocol handling, not actual sound, wiring, switch mechanics, supply stability, or this particular YX5200 module's compatibility. Follow the staged bring-up checklist before installing the electronics in cardboard.
 
@@ -23,16 +23,17 @@ Physical commissioning is still required: no ESP32 USB device was available duri
 | 1 | Regulated, enclosed 12 V / 3 A wall adapter |
 | 1 each | 5.5×2.1 mm female DC jack/pigtail, DC-rated rocker switch, LM2596 adjustable buck converter |
 | 1 | RAMPS 1.4 mechanical endstop module |
-| 1 each | Standard low-current red, yellow and green LEDs |
+| 6 | Four-leg common-anode RGB LEDs, reported label `LB E2-03-04-FCN RGB CA`; two per traffic-light position |
 | 2 | Approximately 1 kΩ resistors for analog mono summing |
-| 3 | LED current-limiting resistors, initially 330 Ω each; confirm against each LED's forward voltage/current rating |
+| 18 | LED current-limiting resistors, initially 470 Ω each: one per color channel per physical LED |
+| 9 | Recommended 10 kΩ pull-up resistors from each RGB GPIO to 3V3, keeping channels off while GPIOs are inputs during reset/boot |
 | As needed | Wire, solder, heat-shrink, proper distribution connectors, optional perfboard and removable connectors |
 
 No Arduino Uno, second ESP32, DFPlayer-branded replacement, DY-SV5W, different speaker, battery pack, or finished-installation breadboard is required.
 
 ## Power and wiring
 
-**Never apply 12 V to the ESP32, YX5200, endstop, or LEDs. Adjust the disconnected LM2596 to 5.0 V with a multimeter before connecting any 5 V devices.** The 5V connection below is the carrier board's regulated-input pin, not the WROOM module's 3.3 V supply pin. LEDs use the ESP32's 3.3 V GPIO outputs through individual resistors, not the 5 V bus. Confirm the carrier's labels and pinout; WROOM-32D identifies the module, not the carrier's USB power circuit.
+**Never apply 12 V to the ESP32, YX5200, endstop, or LEDs. Adjust the disconnected LM2596 to 5.0 V with a multimeter before connecting any 5 V devices.** The 5V connection below is the carrier board's regulated-input pin, not the WROOM module's 3.3 V supply pin. All six LED common anodes connect to ESP32 3V3; their color cathodes connect through individual resistors to GPIOs that sink current. Never connect these common anodes to 5 V with this direct-GPIO circuit. Confirm the carrier's labels and pinout; WROOM-32D identifies the module, not the carrier's USB power circuit.
 
 ```text
 230 V wall outlet
@@ -60,7 +61,6 @@ PSU negative -------- COMMON GROUND DISTRIBUTION BUS
                          |-- LM2596 IN- and OUT- (non-isolated converter)
                          |-- ESP32 GND
                          |-- YX5200 GND / amplifier input ground reference
-                         |-- Red, yellow and green LED cathodes
                          `-- Endstop GND
 ```
 
@@ -77,14 +77,14 @@ GPIO numbers are ESP32 GPIO labels, **not physical header positions**. Check sil
 | PSU negative | Common GND bus | Positive supply is switched; ground stays common |
 | GND bus | PAM8610 power GND; LM2596 IN− and OUT− | Buck input/output grounds share the same system |
 | LM2596 OUT+ (5.0 V) | ESP32 carrier 5V; YX5200 VCC | Separate branches; never the ESP32 3V3 pin |
-| GND bus | ESP32 GND; YX5200 GND; LED cathodes; endstop GND | Connect before applying signals |
+| GND bus | ESP32 GND; YX5200 GND; endstop GND | Connect before applying signals; RGB common legs go to 3V3, not GND |
 | ESP32 GPIO17 / UART2 TX | YX5200 RX | ESP32 transmits; optional ~1 kΩ series resistor if UART noise warrants it |
 | YX5200 TX | ESP32 GPIO16 / UART2 RX | ESP32 receives, 9600 baud, 8N1; confirm module TX is 3.3 V logic |
 | ESP32 3V3 | Endstop VCC | Keep signal within ESP32's 3.3 V logic range |
 | Endstop SIGNAL | ESP32 GPIO27 | Active low; firmware enables input pull-up |
-| ESP32 GPIO18 | 330 Ω resistor → red LED anode (+) | Active high; cathode (−) to GND |
-| ESP32 GPIO19 | 330 Ω resistor → yellow LED anode (+) | Active high; cathode (−) to GND |
-| ESP32 GPIO23 | 330 Ω resistor → green LED anode (+) | Active high; cathode (−) to GND |
+| ESP32 3V3 | Common anode (+) of all six RGB LEDs | Confirm the common leg from the LED's pinout or diode test |
+| RGB GPIOs in table below | Corresponding color cathodes through one 470 Ω resistor per LED/channel | LOW = on, HIGH = off; two separate resistor branches per GPIO |
+| ESP32 3V3 | 10 kΩ pull-up → each RGB GPIO | Nine recommended pull-ups; these do not replace the 18 LED series resistors |
 | YX5200 DAC_L | First 1 kΩ resistor → mono sum node | Line audio, **not SPK output** |
 | YX5200 DAC_R | Second 1 kΩ resistor → same mono sum node | Never short DAC_L and DAC_R together |
 | Mono sum node | PAM8610 left audio input | Use the board's line-input terminal/jack, not a speaker output |
@@ -93,13 +93,41 @@ GPIO numbers are ESP32 GPIO labels, **not physical header positions**. Check sil
 | PAM8610 L− | Speaker − | Both speaker terminals are driven; neither goes to GND |
 | PAM8610 R+ / R− | Leave unconnected | Do not bridge channels; terminate unused input only as board instructions specify |
 
-Each LED needs its **own** series resistor. For an ordinary LED with a 2.0 V forward voltage, 330 Ω gives approximately `(3.3 - 2.0) / 330 = 4 mA`; actual current depends on its forward voltage and GPIO output voltage. Select LEDs that are visible at a few milliamps. High-power LEDs or 5 V/12 V lamp modules need suitable external drivers and must not be connected directly to GPIOs. No addressable-strip level shifter or separate LED supply is used.
+### RGB pairs and GPIO budget
+
+Each pair has three shared controls (R, G and B), so six RGB packages need **9 GPIOs rather than 18**. Both LEDs in a pair always show the same color; the three pairs remain independent. Do not join the color controls of different pairs.
+
+| Pair / position | Red cathodes | Green cathodes | Blue cathodes | Normal traffic color |
+| --- | --- | --- | --- | --- |
+| Top: LEDs 1–2 | GPIO18 | GPIO19 | GPIO23 | Red only |
+| Middle: LEDs 3–4 | GPIO25 | GPIO26 | GPIO32 | Red + green = yellow |
+| Bottom: LEDs 5–6 | GPIO33 | GPIO21 | GPIO22 | Green only |
+
+The application uses 12 GPIOs: nine RGB outputs, UART2 on GPIO16/17, and the sensor on GPIO27. GPIO4/13/14 remain unused output-capable candidates on the WROOM-32D, subject to the carrier's wiring; GPIO1/3 stay reserved for programming/serial. No GPIO expander or multiplexing is required. GPIO21/22 are assigned to LEDs, so do not also use them for I²C without remapping. The map avoids flash pins, boot-strapping pins and input-only pins; see the [Espressif pinout](https://documentation.espressif.com/esp32-wroom-32d_esp32-wroom-32u_datasheet_en.html).
+
+Use **18 separate current-limiting resistors**: six LEDs × three channels. For each GPIO, connect two parallel branches, each containing its own resistor and one LED color cathode. Never share a single series resistor between LEDs or put one in the common-anode leg.
+
+Start with 470 Ω per channel. For a channel with a 2.0 V forward drop, idealized current is `(3.3 - 2.0) / 470 ≈ 2.8 mA` per LED, or approximately 5.6 mA through a shared GPIO. Actual current also depends on the GPIO low voltage and the LED. Verify all channel currents, the board's 3.3 V regulator capacity and visible brightness before installation. Red/green brightness ratios affect the mixed yellow hue; resistor values can be increased per channel to balance it.
+
+The exact datasheet and physical leg order for the reported `LB E2-03-04-FCN` label have not been verified. Confirm the common-anode and R/G/B legs by datasheet or diode test, not position alone. Green/blue channels may be dim if their forward voltage leaves too little headroom at 3.3 V. If brighter operation or a higher LED supply is needed, use suitable external current-sinking drivers and revise the wiring; **do not move the common anodes to 5 V while cathodes are connected directly to ESP32 GPIOs**.
+
+For one color of one pair (repeat for all nine GPIOs):
 
 ```text
-GPIO18 ---- 330Ω ---- red LED anode     cathode ---- GND
-GPIO19 ---- 330Ω ---- yellow LED anode  cathode ---- GND
-GPIO23 ---- 330Ω ---- green LED anode   cathode ---- GND
+3V3 ---- LED 1 common anode
+           LED 1 color cathode ---- 470Ω ----+
+                                           +---- assigned GPIO
+3V3 ---- LED 2 common anode                 |
+           LED 2 color cathode ---- 470Ω ----+
+3V3 -------------------------- 10kΩ --------+
 
+LOW on GPIO lights both channels; HIGH turns them off.
+No LED common leg connects to GND.
+```
+
+### Audio signal wiring
+
+```text
 YX5200 DAC_L ---- 1kΩ ----+
                          +---- PAM8610 left LINE input
 YX5200 DAC_R ---- 1kΩ ----+
@@ -140,7 +168,7 @@ Reboot to select a different mode. A digit sent after selection is rejected; mod
 | Selection | Mode | Initialized hardware | Operation and commands |
 | --- | --- | --- | --- |
 | `1` | FULL | Sensor, LEDs, UART2 | Automatic red → yellow → green → high-five → reward → red |
-| `2` | LIGHTS TEST | LEDs only | Automatically cycles red, yellow, green, off every second. `red`, `yellow`, `green`, `off` hold a lamp. `cycle` restarts cycling. `dance` chases red → yellow → green, one LED at a time every 80 ms |
+| `2` | LIGHTS TEST | LEDs only | Automatically cycles red, yellow, green, off every second. `red`, `yellow`, `green`, `off` hold a lamp. `cycle` restarts cycling. `dance` rotates red, green and blue across all three pairs every 80 ms; both LEDs in each pair match |
 | `3` | AUDIO TEST | UART2 only | `play 1`, `play 2`, `boot`, `error`, `stop`, `pause`, `resume`, `volume 15`, `volume 20`, `next`, `previous`, `retry` |
 | `4` | SENSOR TEST | GPIO27 only | Prints stable PRESSED/RELEASED transitions and a HIGH FIVE EVENT once per debounced press; no per-loop spam |
 | `5` | SEQUENCE TEST | None of the physical sensor/LED/audio devices | Runs the real RobotController with virtual hardware. Send `highfive` at green; inspect state and simulated audio logs |
@@ -194,15 +222,17 @@ The driver directly implements the YX5200/DFPlayer-compatible 10-byte protocol a
 
 ## Configuration and architecture
 
-All tunable defaults are in [`include/Config.h`](include/Config.h): the three LED GPIOs, sensor/UART GPIOs, UART number/baud, serial baud, animation/cycle timings, state durations, debounce, reward track, volume, boot selection, UART pacing/timeouts/queue capacity, and serial buffer limits.
+All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB GPIOs, sensor/UART GPIOs, UART number/baud, serial baud, animation/cycle timings, state durations, debounce, reward track, volume, boot selection, UART pacing/timeouts/queue capacity, and serial buffer limits.
 
 | Setting | Default |
 | --- | --- |
 | ESP32 UART2 RX / TX | GPIO16 ← YX5200 TX / GPIO17 → YX5200 RX |
-| Red / yellow / green LED outputs | GPIO18 / GPIO19 / GPIO23 |
+| Top pair R / G / B | GPIO18 / GPIO19 / GPIO23 |
+| Middle pair R / G / B | GPIO25 / GPIO26 / GPIO32 |
+| Bottom pair R / G / B | GPIO33 / GPIO21 / GPIO22 |
 | High-five input | GPIO27 |
 | Serial / MP3 UART baud | 115200 / 9600 |
-| LED drive / chase frame interval | Active-high on/off / 80 ms |
+| RGB drive / animation frame interval | Common-anode, active-low on/off / 80 ms |
 | Red / yellow / reward | 3000 / 1000 / 30000 ms |
 | Green | Wait indefinitely |
 | Debounce | 30 ms |
@@ -210,7 +240,7 @@ All tunable defaults are in [`include/Config.h`](include/Config.h): the three LE
 | Initial volume | 12 (supported volume range 0–30) |
 | Boot selection timeout / default | 5000 ms / FULL |
 
-To move an LED, change `Config::Pins::LedRed`, `LedYellow`, or `LedGreen` and its matching wire. Keep three distinct, output-capable GPIOs that do not conflict with the sensor, UART, flash or carrier hardware. RobotController needs no changes. LED brightness is set by the LED/resistor combination; no PWM or color-order setting is used. LED initialization sets all outputs low, and each transition turns off the previous lamp before enabling the next.
+To remap the LEDs, edit `Config::Pins::LedRgb`: rows are top/middle/bottom pairs and columns are R/G/B. Compile-time checks reject duplicate pins, sensor/UART conflicts and pins outside the safe output list. RobotController needs no changes. Channels are on/off, not PWM; brightness and mixed-yellow balance depend on the LED/resistor combination. Initialization sets all nine outputs HIGH (off), and each frame blanks all channels before pulling the selected cathodes LOW. Recommended external pull-ups keep them off before initialization.
 
 To compile with another default mode, change the `DEFAULT_APP_MODE` fallback in Config.h or extend the ESP32 build flags in `platformio.ini`:
 
@@ -223,7 +253,7 @@ Modes are numbered 1–5 as in the menu. A serial selection still overrides the 
 ```text
 include/interfaces/     Clock, sensor, audio, traffic light, logger, and electrical IO contracts
 include/core/          Pure C++ application and driver declarations
-src/core/              State machine, debounce, LED chase, UART protocol, parser, diagnostics
+src/core/              State machine, debounce, RGB pair animation, UART protocol, parser, diagnostics
 include/hardware/      ESP32 adapter declarations
 src/hardware/          Arduino GPIO/millis/UART/serial access
 src/main.cpp           Owns and connects components; Arduino setup()/loop() only
@@ -250,9 +280,9 @@ python -m unittest discover -s test_host -v
 
 On Linux, the script uses GCC's `gcov`; on macOS it uses Apple Clang and `xcrun llvm-cov gcov`. If using a different compiler version, set `GCOV` to the matching coverage executable, e.g. `GCOV=gcov-14 python scripts/coverage.py`. Compiler versions can produce slightly different branch totals. Do not merge counters from different source versions or compilers; the script cleans them first.
 
-The tests cover state transitions, −1/exact/+1 timing boundaries and rollover; early/held/repeated high-fives; actual debounce bounce sequences; individual LED selection/off/chase, animation cancellation and restart; fixed UART frames, fragmented/corrupt input, bounded RX, command pacing/queue overflow, initialization/runtime failures, volume limits and stop priority; malformed serial input, boot defaults, and strict mode isolation. An integration test runs the real controller, diagnostics, sensor, LED selection and audio driver together through fake electrical IO.
+The tests cover state transitions, −1/exact/+1 timing boundaries and rollover; early/held/repeated high-fives; actual debounce bounce sequences; RGB pair selection, red+green yellow mixing, off/color rotation, animation cancellation and restart; fixed UART frames, fragmented/corrupt input, bounded RX, command pacing/queue overflow, initialization/runtime failures, volume limits and stop priority; malformed serial input, boot defaults, and strict mode isolation. An integration test runs the real controller, diagnostics, sensor, RGB pair frames and audio driver together through fake electrical IO.
 
-GitHub Actions runs native tests/coverage and host importer/conversion tests on Linux and macOS and builds the ESP32 firmware on Linux for pushes and pull requests. It publishes coverage reports and firmware binaries as workflow artifacts. The importer tests include real WAV, MP3, FLAC and M4A conversion, arbitrary/Unicode filenames, read-back hashes, corrupt input, and safe library replacement.
+GitHub Actions runs native tests/coverage and host importer/conversion tests on Linux and macOS and builds the ESP32 firmware on Linux for pushes and pull requests. It publishes coverage reports and firmware binaries as workflow artifacts. A host test compiles the production GPIO adapter against a recording Arduino stub and checks initialization, active-low polarity, pin mapping and all 512 nine-channel combinations; it does not measure real electrical behavior. The importer tests include real WAV, MP3, FLAC and M4A conversion, arbitrary/Unicode filenames, read-back hashes, corrupt input, and safe library replacement.
 
 ## Hardware bring-up checklist
 
@@ -261,7 +291,7 @@ Make connections with power off. Use one stage at a time; a missing MP3 module m
 1. **Set LM2596 to 5.0 V.** Leave the ESP32, MP3 and LEDs disconnected. Apply the 12 V supply, verify jack polarity, set/measure buck output, then turn power off. Check the output again under load later.
 2. **Power ESP32 only.** Use USB with the external feed isolated as described above. Build/upload, open 115200-baud monitor, reset, verify the menu and boot timeout. Resolve USB/external power isolation before live externally powered tests.
 3. **SENSOR TEST (`4`).** Connect only endstop 3V3/GND/SIGNAL. Verify RELEASED → PRESSED + exactly one HIGH FIVE EVENT → RELEASED. Hold it for several seconds: no repeated events. Tap/bounce it and tune debounce only if needed.
-4. **LIGHTS TEST (`2`).** Connect GPIO18/19/23 through one resistor each to the red/yellow/green LED anodes; connect their cathodes to GND. Check each lamp, off, automatic cycle and `dance` (one lamp lit at a time in a repeating red → yellow → green chase). Sensor/MP3 are not required; LEDs can be tested with the ESP32 powered by USB alone.
+4. **LIGHTS TEST (`2`).** First verify each LED's common-anode/R/G/B pinout. Connect all six common anodes to 3V3, and each color cathode through its own 470 Ω resistor to the GPIO in the pair table (18 series resistors total). Add the nine GPIO pull-ups. Check top red, middle mixed yellow, bottom green, off and cycle. With `dance`, every pair must show red, green and blue in turn, with both LEDs matching. Measure currents and check mixed-yellow visibility, blue/green brightness, and off behavior during reset. Sensor/MP3 are not required; use USB-only ESP32 power with the external feed isolated.
 5. **YX5200 AUDIO TEST (`3`).** Insert the prepared card while unpowered; connect 5V/GND/UART. Leave amplifier/speaker disconnected initially. Wait for verified `[OK] YX5200`, then try `play 1`, `pause`, `resume`, `stop`, `volume 12`, and `status`. UART success alone does not establish audible output.
 6. **PAM8610 and speaker.** Power off, add resistor-summed DAC line audio to the left input and speaker across L+/L−. Power the amplifier from switched 12 V. Start its gain low. Repeat AUDIO TEST, listen for clean sound, and measure 5 V/12 V under playback load. Check for hot components or reset/brownout behavior. Never rewire speaker outputs while energized.
 7. **SEQUENCE TEST (`5`).** Verify red (3 s), yellow (1 s), green (indefinite), then `highfive` → reward (30 s) → red. This mode requires no physical peripheral and does not play actual audio or drive LEDs.
@@ -277,8 +307,8 @@ Record results, module markings/carrier model, measured voltage under load, and 
 | YX5200 not responding | AUDIO TEST; GPIO17 TX → module RX and GPIO16 RX ← module TX; module power/ground and 3.3 V UART levels; 9600 8N1; valid card; wait for initialization; inspect timeout/error log, then `retry`. Clones may require longer startup/command timings or have protocol differences |
 | No speaker audio | A queued command is not proof of playback. Verify `/MP3/0001.mp3`, valid MP3, volume, amplifier 12 V supply/gain/mute state, DAC_L/R resistor sum to line input, input ground, and speaker across one channel's +/−. Leave SPK outputs unused |
 | Audio distortion | Lower MP3 volume and amplifier gain, check clipped source audio, resistor sum, supply sag, loose connections and board temperature. Do not expect clean continuous 15 W from the marketing label |
-| LED stays dark | LIGHTS TEST; correct GPIO, individual series resistor, LED polarity and common GND. Check the LED's forward voltage/current requirements; never bypass its resistor or apply 5 V to the GPIO |
-| Wrong lamp lights | Check red → GPIO18, yellow → GPIO19, green → GPIO23 against Config::Pins and actual header labels. Each LED is a fixed color; swap the wiring or configured GPIOs |
+| LED stays dark | LIGHTS TEST; common anode to 3V3, correct R/G/B cathode and individual resistor to GPIO. LOW lights the channel. Check forward voltage/headroom and both separate branches; never bypass a resistor or connect the LED common anode to 5 V in this circuit |
+| Wrong pair/color lights | Compare all nine R/G/B connections with the pair table and Config::Pins::LedRgb. Middle yellow requires both red and green, with blue off. Correct leg mapping before adjusting resistor balance; both LEDs in each pair should match |
 | Endstop always pressed/released | Check the module's labeled VCC/GND/SIGNAL and switch actuator; power at 3.3 V; measure released HIGH/pressed LOW; inspect connector reversal and switch contact selection. A disconnected input typically reads released through the pull-up |
 | ESP32 resets when audio gets loud | Measure 12 V and 5 V under load; inspect wire/connector resistance, ground distribution, buck thermal/current limits, amplifier gain and short circuits. Keep amplifier current off breadboards and ESP32 supply wiring |
 | Sensor or LEDs work but audio reports failure | Expected isolation: use the individual modes, repair audio, then `retry`. A sensor/LED initialization log verifies software setup, not external wiring |

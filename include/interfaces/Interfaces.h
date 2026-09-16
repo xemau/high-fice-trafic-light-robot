@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -45,10 +46,12 @@ struct ITrafficLight {
     virtual void startAnimation() = 0;
     virtual void updateAnimation() = 0;
 };
+struct RgbChannels { bool red = false, green = false, blue = false; };
+using LedFrame = std::array<RgbChannels, 3>; // Top, middle, bottom LED pairs.
 struct ILedOutputs {
     virtual ~ILedOutputs() = default;
     virtual bool begin() = 0;
-    virtual void write(bool red, bool yellow, bool green) = 0;
+    virtual void write(const LedFrame& frame) = 0;
 };
 struct IUart {
     virtual ~IUart() = default;

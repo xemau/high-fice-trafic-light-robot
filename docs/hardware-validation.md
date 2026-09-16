@@ -8,7 +8,8 @@ Status: **not yet performed on physical hardware**. Native tests and a successfu
 | Firmware commit | Pending |
 | ESP32 carrier model and USB/5V power-path verification | Pending |
 | YX5200 module marking / card format | Pending |
-| Red/yellow/green LED parts, series resistors and GPIO18/19/23 wiring | Pending |
+| Six common-anode RGB LEDs: actual leg order, forward voltages and channel currents | Pending; reported label LB E2-03-04-FCN RGB CA, exact datasheet unverified |
+| Three paired RGB outputs, 18 series resistors, nine pull-ups and 3V3 supply capacity | Pending; use README's nine-GPIO map |
 | PAM8610 board and speaker markings | Pending |
 | Unloaded LM2596 output | Pending: target 5.0 V |
 | Loaded 5 V / 12 V, including loudest intended playback | Pending |
@@ -16,7 +17,9 @@ Status: **not yet performed on physical hardware**. Native tests and a successfu
 - [ ] Buck set and measured before attaching 5 V devices.
 - [ ] ESP32 USB-only boot, upload and serial menu.
 - [ ] SENSOR TEST: press/release, bounce, hold, second press, mounted hand.
-- [ ] LIGHTS TEST: each individual lamp, off, cycle and one-at-a-time LED chase; verify current and polarity.
+- [ ] LIGHTS TEST: top red, middle red+green yellow, bottom green; only the selected pair lights.
+- [ ] Both LEDs of every pair match; dance cycles each pair through red, green and blue.
+- [ ] All channels off during reset and on `off`; verify resistor currents, mixed-yellow hue and blue/green brightness at 3.3 V.
 - [ ] AUDIO TEST: verified UART initialization, play/pause/resume/stop, volume, next/previous.
 - [ ] Resistor-summed DAC audio through one amplifier channel produces clean sound.
 - [ ] No grounded speaker output, channel bridging, or YX5200 SPK-to-amplifier wiring.
