@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import shutil
@@ -12,6 +13,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = "audio-manifest.json"
+DEFAULT_EQ = ROOT / "config/audio-eq.json"
 EXTENSIONS = {".mp3", ".wav", ".wma", ".flac", ".aac", ".m4a", ".ogg", ".opus",
               ".aif", ".aiff", ".caf", ".mp4", ".webm", ".mka", ".mov"}
 
@@ -57,11 +59,44 @@ def ffmpeg_executable():
         raise ValueError("Install requirements-dev.txt or put ffmpeg on PATH") from exc
 
 
-def convert(source, destination, ffmpeg):
+def read_eq(path):
+    if path is None:
+        return None
+    config = json.loads(Path(path).read_text(encoding="utf-8"))
+    limits = {"preamp_db": (-24, 0), "highpass_hz": (20, 500),
+              "bass_hz": (40, 250), "bass_db": (-18, 6),
+              "lows_hz": (100, 800), "lows_db": (-18, 6), "lows_q": (0.2, 5),
+              "mids_hz": (500, 5000), "mids_db": (-18, 6), "mids_q": (0.2, 5)}
+    if not isinstance(config, dict) or set(config) != {"enabled", *limits}:
+        raise ValueError("EQ config must contain enabled and exactly: " + ", ".join(limits))
+    if type(config["enabled"]) is not bool:
+        raise ValueError("EQ enabled must be true or false")
+    for key, (low, high) in limits.items():
+        value = config[key]
+        if type(value) not in (int, float) or not low <= value <= high or not math.isfinite(value):
+            raise ValueError(f"EQ {key} must be a finite number between {low} and {high}")
+    boosts = sum(max(0, config[key]) for key in ("bass_db", "lows_db", "mids_db"))
+    if config["preamp_db"] + boosts > 0:
+        raise ValueError("EQ preamp_db must provide headroom for the sum of positive band gains")
+    return config
+
+
+def eq_filter(config):
+    if config is None or not config["enabled"]:
+        return None
+    return (f"volume={config['preamp_db']}dB,highpass=f={config['highpass_hz']}:p=2,"
+            f"bass=f={config['bass_hz']}:g={config['bass_db']}:t=q:w=0.707,"
+            f"equalizer=f={config['lows_hz']}:g={config['lows_db']}:t=q:w={config['lows_q']},"
+            f"equalizer=f={config['mids_hz']}:g={config['mids_db']}:t=q:w={config['mids_q']}")
+
+
+def convert(source, destination, ffmpeg, audio_filter=None):
     args = [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-xerror", "-n",
             "-i", str(source), "-map", "0:a:0", "-vn", "-map_metadata", "-1",
             "-ar", "44100", "-ac", "2", "-c:a", "libmp3lame", "-b:a", "128k",
             "-id3v2_version", "0", "-write_id3v1", "0", "-write_xing", "0", str(destination)]
+    if audio_filter:
+        args[-1:-1] = ["-af", audio_filter]
     result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode or not destination.is_file() or destination.stat().st_size == 0:
         raise ValueError(f"Cannot convert {source.name}: {result.stderr.strip()}")
@@ -125,7 +160,9 @@ def clean_metadata(output, names):
             sidecar.unlink()
 
 
-def prepare(output, boot, error, music=(), ffmpeg=None, convert_fn=convert, replace=False):
+def prepare(output, boot, error, music=(), ffmpeg=None, convert_fn=convert, replace=False, eq_config=DEFAULT_EQ):
+    eq = read_eq(eq_config)
+    music_filter = eq_filter(eq)
     output = Path(output).expanduser().absolute()
     if output.is_symlink():
         raise ValueError("Output cannot be a symbolic link")
@@ -152,14 +189,18 @@ def prepare(output, boot, error, music=(), ffmpeg=None, convert_fn=convert, repl
         (staged / "MP3").mkdir()
         (staged / "system").mkdir()
         manifest = {"format_version": 1, "encoding": "MP3 CBR 128 kbps, 44100 Hz, stereo",
+                    "music_eq": eq, "music_filter": music_filter,
                     "tracks": [], "files": []}
         jobs = [("music", layout["RewardTrack"] + i, source) for i, source in enumerate(sources)]
         jobs += [("boot", layout["BootTrack"], boot), ("error", layout["ErrorTrack"], error)]
         for role, track, source in jobs:
             relative = f"MP3/{track:04d}.mp3"
-            convert_fn(source, staged / relative, ffmpeg)
+            if role == "music" and music_filter:
+                convert_fn(source, staged / relative, ffmpeg, audio_filter=music_filter)
+            else:
+                convert_fn(source, staged / relative, ffmpeg)
             manifest["tracks"].append({"role": role, "track": track, "source_name": source.name,
-                                       "playback_file": relative})
+                                       "playback_file": relative, "eq_applied": role == "music" and bool(music_filter)})
             if role != "music":
                 shutil.copyfile(source, staged / "system" / f"{role}{source.suffix.lower()}")
         for path in sorted(staged.rglob("*")):
@@ -193,13 +234,18 @@ def main():
     parser.add_argument("--error", type=Path, required=True)
     parser.add_argument("--music", type=Path, nargs="*", default=[], help="Arbitrarily named audio files or folders; first imported track is the reward")
     parser.add_argument("--replace", action="store_true", help="Replace only files owned by a verified previous audio manifest; supply the entire desired music collection")
+    eq_options = parser.add_mutually_exclusive_group()
+    eq_options.add_argument("--eq-config", type=Path, default=DEFAULT_EQ, help="Music-only EQ JSON (default: config/audio-eq.json)")
+    eq_options.add_argument("--no-eq", action="store_true", help="Prepare unfiltered music copies")
     args = parser.parse_args()
     try:
-        manifest = prepare(args.output, args.boot, args.error, args.music, replace=args.replace)
+        manifest = prepare(args.output, args.boot, args.error, args.music, replace=args.replace,
+                           eq_config=None if args.no_eq else args.eq_config)
     except (OSError, ValueError) as exc:
         parser.exit(1, f"Error: {exc}\n")
     for track in manifest["tracks"]:
         print(f"{track['role']:5s} {track['track']:4d}: {track['source_name']} -> {track['playback_file']}")
+    print("Music EQ: " + (manifest["music_filter"] or "disabled"))
     if not args.music:
         print("No reward music supplied; system sounds only. Import music before testing a high-five reward.")
     print(f"Verified {len(manifest['files'])} files in {args.output}")

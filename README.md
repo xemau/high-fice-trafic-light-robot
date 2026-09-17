@@ -8,7 +8,7 @@ The ESP32 controls a **YX5200 Mini MP3 module** over UART2; the YX5200 decodes t
 
 ## Status and verification
 
-The ESP32 firmware builds, and 55 native tests pass across six suites, plus 12 host tests for SD preparation, audio conversion, GPIO output and buffered serial logging. A clean Apple Clang coverage run measured **100% core line coverage and 97.6% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
+The ESP32 firmware builds, and 55 native tests pass across six suites, plus 15 host tests for SD preparation, audio conversion/EQ, GPIO output and buffered serial logging. A clean Apple Clang coverage run measured **100% core line coverage and 97.6% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
 
 Physical commissioning is still required. USB diagnostics have verified YX5200 initialization and status replies, but the reported audible output did not match the requested boot/reward tracks. The SD playback files match their preparation hashes and decode on the laptop; this does not prove the module selects or decodes them correctly. Tests verify application behavior and protocol handling, not actual sound, wiring, switch mechanics or supply stability. Follow the staged bring-up checklist before installing the electronics in cardboard.
 
@@ -189,7 +189,7 @@ Boot-held switches are displayed as pressed but generate no high-five until rele
 
 ### Audio initialization and errors
 
-`begin()` starts asynchronous initialization, not a blocking success check. After a 3-second module settling period, the driver sends stop, select TF/SD, conservative volume, DAC enable, and a volume query, at least 200 ms apart. `[OK] YX5200` requires a valid checksummed volume reply matching the configured startup volume. A reply timeout produces `[ERROR] YX5200 initialization failed`; UART failure, SD removal, module errors, and runtime disconnects are also logged. FULL continues processing LEDs, sensor, timing, and diagnostics if audio fails.
+`begin()` starts asynchronous initialization, not a blocking success check. After a 3-second module settling period, the driver sends stop, select TF/SD, conservative volume, DAC enable, the configured EQ preset, and a volume query, at least 200 ms apart. `[OK] YX5200` requires a valid checksummed volume reply matching the configured startup volume; it does not verify the EQ response curve. A reply timeout produces `[ERROR] YX5200 initialization failed`; UART failure, SD removal, module errors, and runtime disconnects are also logged. FULL continues processing LEDs, sensor, timing, and diagnostics if audio fails.
 
 Runtime commands go into a fixed eight-entry queue and return success **only for acceptance**, not audible playback. Invalid volumes/tracks, failed/not-ready audio, and queue overflow return failure. Commands do not wait for ACKs. The driver parses error/finish notifications and polls status every 5 seconds with a 1.5-second response timeout. Missing-file/out-of-range replies (module errors 5/6) after initialization keep the link usable and raise a one-shot error event; other module errors fail the driver. `status` reports cached driver health; there is no claim that the speaker is connected or that a file exists. Repair wiring/card issues and send `retry` to restart initialization. Commands received before audio is ready are rejected rather than replayed unexpectedly later. Stop discards pending playback and takes priority over health polling at the next permitted transmit slot.
 
@@ -266,6 +266,28 @@ For the current card, `high-enough.wav` is converted to reward track 1. The orig
 The driver directly implements the YX5200/DFPlayer-compatible 10-byte protocol at 9600 baud, 8N1. DFRobot documentation is used as a **protocol reference**, not as a requirement to replace the existing YX5200. Module variants can differ; AUDIO TEST verifies the actual module. The checksum is the 16-bit two's complement of bytes 1–6 (version through parameter-low). For volume 15, the frame is `7E FF 06 06 00 00 0F FE E6 EF`. Some older manual examples contain inconsistent checksums; this implementation follows the algorithm and tests complete frames and corrupted/fragmented replies.
 
 ## Configuration and architecture
+
+### Speaker equalizer
+
+Edit [config/audio-eq.json](config/audio-eq.json) to tune **music playback copies** during SD preparation. It defaults to a bass-reduction starting point, not a measured calibration of the speaker/enclosure:
+
+| Control | Default | Effect |
+| --- | --- | --- |
+| `highpass_hz` | 80 Hz | Two-pole high-pass reduces deep bass/rumble |
+| `bass_hz`, `bass_db` | 120 Hz, −6 dB | Low-shelf bass cut |
+| `lows_hz`, `lows_db`, `lows_q` | 300 Hz, −3 dB, Q 0.7 | Broad low-mid cut |
+| `mids_hz`, `mids_db`, `mids_q` | 1500 Hz, 0 dB, Q 0.7 | Adjustable midrange band; no boost by default |
+| `preamp_db` | −3 dB | Digital headroom; does not change the module's 30/30 music-volume setting |
+
+The bands overlap: these are filter gains, not guaranteed total attenuation at each frequency. Larger Q makes a peaking band narrower. Positive band gains require at least their summed gain in negative preamp headroom; this is not a guarantee against every transient or amplifier clipping. Keep amplifier gain low and reduce volume if the speaker buzzes or distorts.
+
+The importer applies this profile by default, only to music. Boot/error conversion and all original source files remain unchanged. The manifest records `music_eq`, the FFmpeg filter chain and each track's `eq_applied` flag. Unknown/missing fields, invalid ranges, non-finite values and insufficient boost headroom are rejected before the destination is changed.
+
+Re-run the usual preparation command with all original songs and `--replace` to update a verified existing card. `--eq-config /path/to/profile.json` selects another profile; `--no-eq` or `"enabled": false` generates unfiltered copies. Always regenerate from original sources, not already-EQ'd playback copies. Just editing the JSON or uploading firmware does **not** change existing audio on the card.
+
+The YX5200 only offers Normal/Pop/Rock/Jazz/Classic/Bass presets over UART, not independent frequency bands ([protocol reference](https://datasheet4u.com/pdf-down/Y/X/5/YX5200-24SS-YueXin.pdf)). Firmware requests `Config::DefaultEq = 0` (Normal) on every startup/retry so it does not deliberately add a Bass preset over the prepared EQ. Preset selection is logged as `cmd=0x07`; its audible effect is not verified by the volume handshake. Leave it at Normal when using prepared EQ. The adjustable filters run on the laptop through [FFmpeg](https://ffmpeg.org/ffmpeg-filters.html), not live on the robot, and do not require hardware changes.
+
+### Firmware settings
 
 All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB GPIOs, sensor/UART GPIOs, UART number/baud, serial baud, animation/cycle timings, state durations, debounce, reward track, volume, boot selection, UART pacing/timeouts/queue capacity, and serial buffer limits.
 

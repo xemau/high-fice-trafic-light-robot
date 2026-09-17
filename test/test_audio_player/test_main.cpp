@@ -9,7 +9,7 @@ struct Rig {
     void tick(uint32_t ms = Config::AudioCommandMs) { clock.advance(ms); audio.update(); }
     void query() {
         TEST_ASSERT_TRUE(audio.begin()); tick(Config::AudioBootMs);
-        for (int i = 0; i < 4; ++i) tick();
+        for (int i = 0; i < 5; ++i) tick();
     }
     void ready() { query(); uart.respond(0x43, Config::DefaultVolume); audio.update(); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, audio.status()); }
     void last(uint8_t cmd, uint16_t arg = 0) {
@@ -48,7 +48,7 @@ void startup_pacing_verifies_volume_not_just_ack() {
     r.tick(1); r.last(0x16);
     r.tick(Config::AudioCommandMs - 1); TEST_ASSERT_EQUAL(1, r.uart.tx.size());
     r.tick(1); r.last(0x09, 2); r.tick(); r.last(0x06, Config::DefaultVolume);
-    r.tick(); r.last(0x1a); r.tick(); r.last(0x43);
+    r.tick(); r.last(0x1a); r.tick(); r.last(0x07, Config::DefaultEq); r.tick(); r.last(0x43);
     r.uart.respond(0x41, 0); r.uart.respond(0x3f, 2); r.uart.respond(0x43, 30); r.audio.update();
     TEST_ASSERT_EQUAL_INT(AudioStatus::Starting, r.audio.status());
     r.uart.respond(0x43, Config::DefaultVolume); r.audio.update();
@@ -137,7 +137,7 @@ void startup_and_poll_rollover() {
     TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
     r.clock.time = UINT32_MAX - 10; r.audio.begin(); r.tick(Config::AudioBootMs);
     TEST_ASSERT_EQUAL_INT(AudioStatus::Starting, r.audio.status());
-    for (int i = 0; i < 4; ++i) r.tick();
+    for (int i = 0; i < 5; ++i) r.tick();
     r.tick(Config::AudioResponseMs + 1); TEST_ASSERT_EQUAL_INT(AudioStatus::Failed, r.audio.status());
 }
 void logs_track_requests_responses_and_persistent_error_context() {
@@ -199,7 +199,7 @@ void errors_are_named_and_volume_mismatch_is_visible() {
         TEST_ASSERT_TRUE(r.log.contains(names[code]));
     }
     Rig r; r.query(); r.uart.respond(0x43, 30); r.audio.update();
-    TEST_ASSERT_TRUE(r.log.contains("got=30 expected=12 init_step=5/5"));
+    TEST_ASSERT_TRUE(r.log.contains("got=30 expected=12 init_step=6/6"));
     r.tick(Config::AudioResponseMs);
     TEST_ASSERT_TRUE(r.log.contains("last_tx=0x43/0 last_rx=0x43/30"));
     TEST_ASSERT_TRUE(r.log.contains("rx_bytes=10 rx_frames=1"));

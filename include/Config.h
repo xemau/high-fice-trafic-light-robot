@@ -34,6 +34,7 @@ constexpr uint16_t BootTrack = 2998;
 constexpr uint16_t ErrorTrack = 2999;
 constexpr int MaxVolume = 30;
 constexpr int MusicVolume = MaxVolume;
+constexpr uint8_t DefaultEq = 0; // YX5200: Normal=0, Pop=1, Rock=2, Jazz=3, Classic=4, Bass=5.
 constexpr uint16_t MaxTrack = 9999;
 constexpr uint32_t AudioBootMs = 3000;
 constexpr uint32_t AudioCommandMs = 200;
@@ -48,6 +49,7 @@ constexpr auto DefaultMode = static_cast<AppMode>(DEFAULT_APP_MODE);
 static_assert(DEFAULT_APP_MODE >= 1 && DEFAULT_APP_MODE <= 5, "DEFAULT_APP_MODE must be 1..5");
 static_assert(DefaultVolume >= 0 && DefaultVolume <= MaxVolume);
 static_assert(MusicVolume >= 0 && MusicVolume <= MaxVolume);
+static_assert(DefaultEq <= 5);
 static_assert(RewardTrack >= 1 && RewardTrack <= MaxTrack);
 static_assert(BootTrack > RewardTrack && ErrorTrack > RewardTrack && BootTrack != ErrorTrack);
 static_assert(BootTrack <= MaxTrack && ErrorTrack <= MaxTrack);

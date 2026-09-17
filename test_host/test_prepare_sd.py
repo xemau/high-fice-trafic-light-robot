@@ -1,6 +1,8 @@
 import json
+import math
 from pathlib import Path
 import subprocess
+import struct
 import tempfile
 import unittest
 import wave
@@ -22,10 +24,10 @@ class PreparationTests(unittest.TestCase):
     def prepare(self, music=(), **kwargs):
         return sd.prepare(self.output, self.boot, self.error, music,
                           ffmpeg="fake-ffmpeg", convert_fn=kwargs.get("convert_fn", self.fake_conversion),
-                          replace=kwargs.get("replace", False))
+                          replace=kwargs.get("replace", False), eq_config=kwargs.get("eq_config", sd.DEFAULT_EQ))
 
     @staticmethod
-    def fake_conversion(source, target, ffmpeg):
+    def fake_conversion(source, target, ffmpeg, audio_filter=None):
         target.write_bytes(b"converted:" + source.read_bytes())
 
     def test_original_names_and_configured_system_ids(self):
@@ -132,8 +134,84 @@ class PreparationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "literal"):
             sd.read_layout(config)
 
+    def test_eq_is_music_only_recorded_and_can_be_disabled(self):
+        song = self.root / "song.wav"
+        song.write_bytes(b"reward")
+        calls = []
+
+        def record(source, target, ffmpeg, audio_filter=None):
+            calls.append((source.name, audio_filter))
+            self.fake_conversion(source, target, ffmpeg)
+
+        manifest = self.prepare([song], convert_fn=record)
+        self.assertIn("bass=f=120:g=-6", calls[0][1])
+        self.assertEqual([None, None], [entry[1] for entry in calls[1:]])
+        self.assertEqual([True, False, False], [entry["eq_applied"] for entry in manifest["tracks"]])
+        self.assertEqual(sd.read_eq(sd.DEFAULT_EQ), manifest["music_eq"])
+        self.assertEqual(calls[0][1], manifest["music_filter"])
+        calls.clear()
+        manifest = self.prepare([song], convert_fn=record, replace=True, eq_config=None)
+        self.assertIsNone(manifest["music_filter"])
+        self.assertTrue(all(value is None for _, value in calls))
+        self.assertEqual(b"reward", song.read_bytes())
+
+    def test_invalid_eq_fails_before_touching_destination(self):
+        valid = sd.read_eq(sd.DEFAULT_EQ)
+        cases = [[], {}, {**valid, "typo": 1}, {**valid, "enabled": 1},
+                 {**valid, "bass_db": "-6"}, {**valid, "mids_db": float("nan")},
+                 {**valid, "highpass_hz": float("inf")}, {**valid, "lows_q": 0},
+                 {**valid, "bass_db": True}, {**valid, "mids_hz": 10 ** 1000},
+                 {**valid, "bass_db": 6, "mids_db": 6}]
+        path = self.root / "eq.json"
+        for config in cases:
+            path.write_text(json.dumps(config))
+            with self.subTest(config=config), self.assertRaises(ValueError):
+                self.prepare(eq_config=path)
+            self.assertFalse(self.output.exists())
+        path.write_text(json.dumps({**valid, "enabled": False}))
+        self.assertIsNone(sd.eq_filter(sd.read_eq(path)))
+        path.write_text(json.dumps({**valid, "bass_db": 6, "preamp_db": -6}))
+        self.assertIn("g=6", sd.eq_filter(sd.read_eq(path)))
+
 
 class RealConversionTests(unittest.TestCase):
+    def test_music_eq_reduces_bass_relative_to_mids(self):
+        ffmpeg = sd.ffmpeg_executable()
+        frequencies = (100, 300, 1500)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "test tones.wav"
+            samples = [int(4000 * sum(math.sin(2 * math.pi * f * i / 44100) for f in frequencies))
+                       for i in range(44100)]
+            with wave.open(str(source), "wb") as wav:
+                wav.setnchannels(1)
+                wav.setsampwidth(2)
+                wav.setframerate(44100)
+                wav.writeframes(struct.pack("<" + "h" * len(samples), *samples))
+            original = sd.digest(source)
+            measured = []
+            for name, config in [("flat", None), ("eq", sd.DEFAULT_EQ)]:
+                destination = root / name
+                manifest = sd.prepare(destination, source, source, [source], ffmpeg=ffmpeg, eq_config=config)
+                sd.verify(destination, manifest)
+                result = subprocess.run([ffmpeg, "-v", "error", "-i", str(destination / "MP3/0001.mp3"),
+                                         "-ac", "1", "-ar", "44100", "-f", "f32le", "-"],
+                                        check=True, capture_output=True)
+                decoded = struct.unpack("<" + "f" * (len(result.stdout) // 4), result.stdout)[8820:35280]
+                amplitudes = []
+                for frequency in frequencies:
+                    real = sum(value * math.cos(2 * math.pi * frequency * i / 44100) for i, value in enumerate(decoded))
+                    imaginary = sum(value * math.sin(2 * math.pi * frequency * i / 44100) for i, value in enumerate(decoded))
+                    amplitudes.append(math.hypot(real, imaginary))
+                measured.append(amplitudes)
+            gains = [20 * math.log10(eq / flat) for eq, flat in zip(measured[1], measured[0])]
+            self.assertLess(gains[0], gains[2] - 3)
+            self.assertLess(gains[1], gains[2] - 1.5)
+            self.assertAlmostEqual(-3, gains[2], delta=1)
+            self.assertEqual(original, sd.digest(source))
+            for name in ("2998.mp3", "2999.mp3"):
+                self.assertEqual(sd.digest(root / "flat/MP3" / name), sd.digest(root / "eq/MP3" / name))
+
     def test_wav_mp3_flac_and_m4a_with_arbitrary_names(self):
         ffmpeg = sd.ffmpeg_executable()
         with tempfile.TemporaryDirectory() as temp:

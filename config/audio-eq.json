@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "preamp_db": -3,
+  "highpass_hz": 80,
+  "bass_hz": 120,
+  "bass_db": -6,
+  "lows_hz": 300,
+  "lows_db": -3,
+  "lows_q": 0.7,
+  "mids_hz": 1500,
+  "mids_db": 0,
+  "mids_q": 0.7
+}

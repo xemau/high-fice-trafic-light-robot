@@ -3,6 +3,10 @@
 #include <cstdio>
 
 namespace {
+constexpr std::array<Mp3Frame, 6> Initialization{{
+    {0x16, 0}, {0x09, 2}, {0x06, Config::DefaultVolume},
+    {0x1a, 0}, {0x07, Config::DefaultEq}, {0x43, 0}
+}};
 const char* moduleErrorName(uint16_t code) {
     switch (code) {
         case 1: return "busy/card unavailable";
@@ -60,8 +64,8 @@ void YX5200AudioPlayer::trace(const char* event, uint8_t command, uint16_t param
 void YX5200AudioPlayer::reportDiagnostics() {
     char message[320];
     std::snprintf(message, sizeof(message),
-                  "[YX5200 STATUS] audio=%s init_step=%u/5 queue=%u last_named_track=%u tx_frames=%lu rx_bytes=%lu rx_frames=%lu discarded_bytes=%lu partial_timeouts=%lu awaiting_status=%u",
-                  audioStatusName(status_), static_cast<unsigned>(initStep_), static_cast<unsigned>(count_),
+                  "[YX5200 STATUS] audio=%s init_step=%u/%u queue=%u last_named_track=%u tx_frames=%lu rx_bytes=%lu rx_frames=%lu discarded_bytes=%lu partial_timeouts=%lu awaiting_status=%u",
+                  audioStatusName(status_), static_cast<unsigned>(initStep_), static_cast<unsigned>(Initialization.size()), static_cast<unsigned>(count_),
                   static_cast<unsigned>(lastTrack_), static_cast<unsigned long>(txFrames_),
                   static_cast<unsigned long>(rxBytes_), static_cast<unsigned long>(rxFrames_),
                   static_cast<unsigned long>(parser_.discardedBytes()), static_cast<unsigned long>(partialTimeouts_),
@@ -112,10 +116,10 @@ bool YX5200AudioPlayer::begin() {
     log_.log("[AUDIO] YX5200 initialization pending");
     char message[160];
     std::snprintf(message, sizeof(message),
-                  "[YX5200 INIT] baud=%lu rx_gpio=%u tx_gpio=%u settle_ms=%lu response_ms=%lu volume=%d",
+                  "[YX5200 INIT] baud=%lu rx_gpio=%u tx_gpio=%u settle_ms=%lu response_ms=%lu volume=%d eq_requested=%u",
                   static_cast<unsigned long>(Config::Mp3Baud), static_cast<unsigned>(Config::Pins::Mp3Rx),
                   static_cast<unsigned>(Config::Pins::Mp3Tx), static_cast<unsigned long>(Config::AudioBootMs),
-                  static_cast<unsigned long>(Config::AudioResponseMs), Config::DefaultVolume);
+                  static_cast<unsigned long>(Config::AudioResponseMs), Config::DefaultVolume, static_cast<unsigned>(Config::DefaultEq));
     log_.log(message);
     return true;
 }
@@ -214,7 +218,7 @@ void YX5200AudioPlayer::receive(const Mp3Frame& frame) {
         } else fail(message);
     } else if (frame.command == 0x3b && (frame.parameter & 2)) {
         fail("[ERROR] YX5200 SD card removed");
-    } else if (status_ == AudioStatus::Starting && initStep_ == 5 &&
+    } else if (status_ == AudioStatus::Starting && initStep_ == Initialization.size() &&
                frame.command == 0x43 && frame.parameter == Config::DefaultVolume) {
         status_ = AudioStatus::Ready;
         queriedAt_ = clock_.now();
@@ -230,8 +234,9 @@ void YX5200AudioPlayer::receive(const Mp3Frame& frame) {
         log_.log(message);
     } else if (status_ == AudioStatus::Starting && frame.command == 0x43) {
         char message[112];
-        std::snprintf(message, sizeof(message), "[WARN] volume reply not accepted: got=%u expected=%d init_step=%u/5",
-                      static_cast<unsigned>(frame.parameter), Config::DefaultVolume, static_cast<unsigned>(initStep_));
+        std::snprintf(message, sizeof(message), "[WARN] volume reply not accepted: got=%u expected=%d init_step=%u/%u",
+                      static_cast<unsigned>(frame.parameter), Config::DefaultVolume, static_cast<unsigned>(initStep_),
+                      static_cast<unsigned>(Initialization.size()));
         log_.log(message);
     }
 }
@@ -262,10 +267,9 @@ void YX5200AudioPlayer::update() {
     }
     if (status_ == AudioStatus::Starting) {
         if (!elapsed(now, startedAt_, Config::AudioBootMs)) return;
-        if (initStep_ < 5 && elapsed(now, lastSent_, Config::AudioCommandMs)) {
-            const Mp3Frame init[] = {{0x16, 0}, {0x09, 2}, {0x06, Config::DefaultVolume}, {0x1a, 0}, {0x43, 0}};
-            if (send(init[initStep_].command, init[initStep_].parameter)) ++initStep_;
-        } else if (initStep_ == 5 && elapsed(now, lastSent_, Config::AudioResponseMs)) {
+        if (initStep_ < Initialization.size() && elapsed(now, lastSent_, Config::AudioCommandMs)) {
+            if (send(Initialization[initStep_].command, Initialization[initStep_].parameter)) ++initStep_;
+        } else if (initStep_ == Initialization.size() && elapsed(now, lastSent_, Config::AudioResponseMs)) {
             fail("[ERROR] YX5200 initialization failed (volume response timeout)");
         }
         return;
