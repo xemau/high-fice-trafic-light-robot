@@ -8,9 +8,9 @@ The ESP32 controls a **YX5200 Mini MP3 module** over UART2; the YX5200 decodes t
 
 ## Status and verification
 
-The ESP32 firmware builds, and 46 native tests pass across six suites, plus 12 host tests for SD preparation, audio conversion and GPIO output. A clean Apple Clang coverage run measured **100% core line coverage and 97.8% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
+The ESP32 firmware builds, and 53 native tests pass across six suites, plus 12 host tests for SD preparation, audio conversion, GPIO output and buffered serial logging. A clean Apple Clang coverage run measured **100% core line coverage and 98.2% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
 
-Physical commissioning is still required: no ESP32 USB device was available during implementation. Tests verify application behavior and protocol handling, not actual sound, wiring, switch mechanics, supply stability, or this particular YX5200 module's compatibility. Follow the staged bring-up checklist before installing the electronics in cardboard.
+Physical commissioning is still required. USB diagnostics have verified YX5200 initialization and status replies, but the reported audible output did not match the requested boot/reward tracks. The SD playback files match their preparation hashes and decode on the laptop; this does not prove the module selects or decodes them correctly. Tests verify application behavior and protocol handling, not actual sound, wiring, switch mechanics or supply stability. Follow the staged bring-up checklist before installing the electronics in cardboard.
 
 ## Hardware BOM
 
@@ -192,6 +192,41 @@ Boot-held switches are displayed as pressed but generate no high-five until rele
 Runtime commands go into a fixed eight-entry queue and return success **only for acceptance**, not audible playback. Invalid volumes/tracks, failed/not-ready audio, and queue overflow return failure. Commands do not wait for ACKs. The driver parses error/finish notifications and polls status every 5 seconds with a 1.5-second response timeout. Missing-file/out-of-range replies (module errors 5/6) after initialization keep the link usable and raise a one-shot error event; other module errors fail the driver. `status` reports cached driver health; there is no claim that the speaker is connected or that a file exists. Repair wiring/card issues and send `retry` to restart initialization. Commands received before audio is ready are rejected rather than replayed unexpectedly later. Stop discards pending playback and takes priority over health polling at the next permitted transmit slot.
 
 FULL plays the boot sound once after audio becomes ready. A late startup never interrupts an active reward. Failed LED/sensor initialization, recoverable missing-track errors, and rejected diagnostic commands request the error sound when audio is available. AUDIO TEST accepts `boot` and `error` explicitly but does not play a boot cue automatically. An absent/broken MP3 module cannot emit an error sound; Serial remains the fallback. Failure to find the error cue itself is logged without recursively requesting it.
+
+### Tracing an unexpected error sound
+
+Serial log messages carry `[t=...]` milliseconds since ESP32 boot. Startup also prints the ESP reset-reason code, free heap and firmware build date/time. These logs are sent over USB serial, not saved on the SD card.
+
+Every system-sound request logs `[SOUND]` with its role, track, reason, result, mode, robot state and audio state. Reasons distinguish manual `error`, invalid/unavailable commands, LED/sensor initialization failures and module faults. Suppressed boot sounds and error-cue recursion prevention are logged too. A queued request is not proof of playback.
+
+For example, a module-reported missing file produces a sequence like this (fields abbreviated):
+
+```text
+[AUDIO PLAY] track=1 file=/MP3/0001.mp3
+[YX5200 QUEUED] cmd=0x12 param=1 ... not yet sent
+[YX5200 TX] cmd=0x12 param=1 ... written to UART; not proof of playback
+[YX5200 RX] cmd=0x40 param=6 ... valid checksummed frame
+[ERROR] YX5200 module error 6 (file not found/mismatch); last_named_track=1 ...
+[SOUND] role=error track=2999 reason=[ERROR] YX5200 module error 6 ... result=queued ...
+[YX5200 TX] cmd=0x12 param=2999 ...
+```
+
+`[COMMAND]` records the completed input and whether it arrived during `boot-menu` or `active` operation. **Enter `3` plus Enter within the five-second boot menu to select AUDIO TEST.** Entering `3` after `[MODE] FULL` is an invalid command, which requests the error sound; it does not switch modes. Reboot to select another mode.
+
+After uploading this firmware using the safe power arrangement described above:
+
+1. Open `pio device monitor -b 115200`, select AUDIO TEST at boot, and wait for `[OK] YX5200`.
+2. Enter `status`, then `boot`. Note what you hear and keep the corresponding TX/RX and SOUND lines.
+3. Enter `play 1`, listen briefly, then enter `stop`. Manual AUDIO TEST playback has no automatic 30-second cutoff.
+4. Enter `error` once for comparison, then `stop` and `status`. Send the complete log from startup through the final status, not just the last error line.
+
+`status` includes a `[YX5200 STATUS]` snapshot: initialization step, queue depth, last named track, sent-frame count, received-byte/frame counts, discarded-byte count, partial-frame timeouts, pending health query, last TX/RX command and parameter, and the last module/transport fault. Fault context remains available after the error event is consumed; `retry` starts a new initialization attempt and resets these counters and fault context. Queue/argument rejections are logged at the call site, not retained as module faults.
+
+TX is logged only after the UART accepts a complete frame. `TX_REJECTED` identifies a failed write attempt; `QUEUED` and `REJECT` distinguish pending commands, unavailable audio and a full queue. RX logs include every valid frame, including acknowledgements and otherwise unhandled replies. A finished-track reply logs both `reported_index` and `last_named_track`; the module's physical file index need not equal the filename ID, so a difference alone is not treated as an error. `last_named_track=0` means no known named-track context (startup, stop or next/previous selection), not file zero.
+
+Malformed/incomplete UART data is counted, with warning summaries limited to once per second. Discarded bytes count parser resynchronization drops; partial timeouts count abandoned incomplete buffers, not confirmed bad SD files. Volume-reply mismatches log the received/expected values. Error-code labels follow the [DFRobot-compatible protocol definitions](https://github.com/DFRobot/DFRobotDFPlayerMini/blob/master/DFRobotDFPlayerMini.h); retain the numeric code when investigating module variants.
+
+Logging stays bounded and non-blocking. Under sustained noise or input flooding, the console drops whole messages and later reports `serial log overflow`; missing lines in that case are not proof that an event did not happen. The new diagnostics do not claim to identify audible content, scan SD filenames through UART, or fix an unverified hardware fault.
 
 ## SD-card layout and YX5200 compatibility
 
