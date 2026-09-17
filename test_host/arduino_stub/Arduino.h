@@ -8,6 +8,9 @@ uint32_t millis();
 void pinMode(uint8_t pin, uint8_t mode);
 void digitalWrite(uint8_t pin, uint8_t value);
 int digitalRead(uint8_t pin);
+uint32_t ledcSetup(uint8_t channel, uint32_t frequency, uint8_t resolutionBits);
+void ledcAttachPin(uint8_t pin, uint8_t channel);
+void ledcWrite(uint8_t channel, uint32_t duty);
 class HardwareSerial {
 public:
     explicit HardwareSerial(uint8_t = 0) {}

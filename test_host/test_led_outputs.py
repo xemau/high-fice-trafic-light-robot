@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class LedOutputTests(unittest.TestCase):
-    def test_common_anode_mapping_startup_and_all_channel_combinations(self):
+    def test_common_anode_pwm_mapping_startup_gamma_and_failure(self):
         compiler = shutil.which("c++")
         self.assertIsNotNone(compiler, "A host C++ compiler is required")
         stub = ROOT / "test_host" / "arduino_stub"

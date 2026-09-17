@@ -46,7 +46,7 @@ struct ITrafficLight {
     virtual void startAnimation() = 0;
     virtual void updateAnimation() = 0;
 };
-struct RgbChannels { bool red = false, green = false, blue = false; };
+struct RgbChannels { uint8_t red = 0, green = 0, blue = 0; };
 using LedFrame = std::array<RgbChannels, 3>; // Top, middle, bottom LED pairs.
 struct ILedOutputs {
     virtual ~ILedOutputs() = default;

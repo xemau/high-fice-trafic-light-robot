@@ -1,14 +1,16 @@
 # High-Five Traffic-Light Robot
 
-PlatformIO / Arduino / C++17 firmware for the existing **ESP32-WROOM-32D development board** and **six four-leg common-anode RGB LEDs, wired as three pairs: top, middle and bottom**. The robot displays red for 3 seconds, yellow for 1 second, then waits on green for a debounced high-five. A high-five randomly selects one of `/MP3/0001.mp3` through `/MP3/0003.mp3` and starts a rotating RGB animation. At 26 seconds the animation changes to the middle yellow pair; at 30 seconds audio stops and the robot returns to red.
+PlatformIO / Arduino / C++17 firmware for the existing **ESP32-WROOM-32D development board** and **six four-leg common-anode RGB LEDs, wired as three pairs: top, middle and bottom**. The robot displays red for 3 seconds, yellow for 1 second, then waits on green for a debounced high-five. A high-five randomly selects one of `/MP3/0001.mp3` through `/MP3/0003.mp3` and starts a unique full-spectrum RGB fade. At 26 seconds the animation changes to the middle yellow pair; at 30 seconds audio stops and the robot returns to red.
 
 The automatic red phase remains 3 seconds, below the 5-second maximum. The 30-second reward timer starts when the high-five triggers the reward, not when audible playback begins. The yellow warning starts at 26 seconds. At the deadline, firmware immediately sends stop, schedules one paced stop retry, and shows red. After another 3-second red and 1-second yellow phase, green waits indefinitely for a new button press. Track selection uses button timing to vary the pseudo-random sequence and avoids playing the same reward track twice consecutively. This is a reward-phase limit, not a universal audio timeout: manual AUDIO TEST playback and boot/error sounds have no added 30-second cutoff.
+
+The reward animation continuously fades between seeded, randomized HSV colors. Targets take 2–3.5 seconds to reach, with gamma-corrected brightness updates every 20 ms; no deliberate black frame or sudden strobe is part of the dance. Hardware PWM runs at 5 kHz, while the visible color motion remains below one transition per second. The ESP32 seeds the generator at boot and every animation mixes in its start time and evolving random state, so successive rewards do not repeat a fixed sequence. This reduced-flash design uses the W3C limit of no more than three flashes per second as a conservative reference, but it cannot guarantee that every person will tolerate the effect. Brightness, contrast, viewing distance and individual sensitivity still matter. See [W3C G19](https://www.w3.org/WAI/WCAG22/Techniques/general/G19) and the [Epilepsy Foundation photosensitivity guidance](https://www.epilepsy.com/what-is-epilepsy/seizure-triggers/photosensitivity).
 
 The ESP32 controls a **YX5200 Mini MP3 module** over UART2; the YX5200 decodes the audio. Its DAC outputs feed one PAM8610 amplifier channel and the existing 4 Ω speaker. No additional microcontroller or replacement MP3 module is needed.
 
 ## Status and verification
 
-The ESP32 firmware builds, and 47 native tests pass across six suites, plus 12 host tests for SD preparation, audio conversion and GPIO output. A clean Apple Clang coverage run measured **100% core line coverage and 97.2% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
+The ESP32 firmware builds, and 48 native tests pass across six suites, plus 12 host tests for SD preparation, audio conversion and PWM output. A clean Apple Clang coverage run measured **100% core line coverage and 97.1% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
 
 Physical commissioning is still required: no ESP32 USB device was available during implementation. Tests verify application behavior and protocol handling, not actual sound, wiring, switch mechanics, supply stability, or this particular YX5200 module's compatibility. Follow the staged bring-up checklist before installing the electronics in cardboard.
 
@@ -176,7 +178,7 @@ Reboot to select a different mode. A digit sent after selection is rejected; mod
 | Selection | Mode | Initialized hardware | Operation and commands |
 | --- | --- | --- | --- |
 | `1` | FULL | Sensor, LEDs, UART2 | Automatic red → yellow → green → high-five → animation → yellow warning → red |
-| `2` | LIGHTS TEST | LEDs only | Automatically cycles red, yellow, green, off every second. `red`, `yellow`, `green`, `off` hold a lamp. `cycle` restarts cycling. `dance` rotates red, green and blue across all three pairs every 80 ms; both LEDs in each pair match |
+| `2` | LIGHTS TEST | LEDs only | Automatically cycles red, yellow, green, off every second. `red`, `yellow`, `green`, `off` hold a lamp. `cycle` restarts cycling. `dance` runs the seeded full-spectrum fade; both LEDs in each pair match |
 | `3` | AUDIO TEST | UART2 only | `play 1`, `play 2`, `boot`, `error`, `stop`, `pause`, `resume`, `volume 15`, `volume 20`, `next`, `previous`, `retry` |
 | `4` | SENSOR TEST | GPIO27 only | Prints stable PRESSED/RELEASED transitions and a HIGH FIVE EVENT once per debounced press; no per-loop spam |
 | `5` | SEQUENCE TEST | None of the physical sensor/LED/audio devices | Runs the real RobotController with virtual hardware. Send `highfive` at green; inspect state and simulated audio logs |
@@ -240,16 +242,16 @@ All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB
 | Bottom pair R / G / B | GPIO33 / GPIO21 / GPIO22 |
 | High-five input | GPIO27 |
 | Serial / MP3 UART baud | 115200 / 9600 |
-| RGB drive / animation frame interval | Common-anode, active-low on/off / 80 ms |
+| RGB drive / animation | Common-anode, active-low 5 kHz 8-bit PWM / 20 ms updates / randomized 2–3.5 s fades |
 | Red / yellow / reward warning / reward end | 3000 / 1000 / 26000 / 30000 ms |
 | Green | Wait indefinitely |
 | Debounce | 30 ms |
 | Reward tracks / boot / error track | 1–3 (random, no immediate repeat) / 2998 / 2999 |
-| Initial volume | 12 (supported volume range 0–30) |
-| YX5200 equalizer | Pop / 1 (Normal=0, Pop=1, Rock=2, Jazz=3, Classic=4, Bass=5) |
+| Initial volume | 30 (supported volume range 0–30) |
+| YX5200 equalizer | Jazz / 3 (Normal=0, Pop=1, Rock=2, Jazz=3, Classic=4, Bass=5) |
 | Boot selection timeout / default | 5000 ms / FULL |
 
-To remap the LEDs, edit `Config::Pins::LedRgb`: rows are top/middle/bottom pairs and columns are R/G/B. Compile-time checks reject duplicate pins, sensor/UART conflicts and pins outside the safe output list. RobotController needs no changes. Channels are on/off, not PWM; brightness and mixed-yellow balance depend on the LED/resistor combination. Initialization sets all nine outputs HIGH (off), and each frame blanks all channels before pulling the selected cathodes LOW. Recommended external pull-ups keep them off before initialization.
+To remap the LEDs, edit `Config::Pins::LedRgb`: rows are top/middle/bottom pairs and columns are R/G/B. Compile-time checks reject duplicate pins, sensor/UART conflicts and pins outside the safe output list. RobotController needs no changes. The nine channels use the ESP32 LEDC peripheral for independent active-low PWM and software gamma correction; resistor values still affect current and color balance. Initialization drives all channels HIGH (off) before attaching PWM. Recommended external pull-ups keep them off before initialization.
 
 To compile with another default mode, change the `DEFAULT_APP_MODE` fallback in Config.h or extend the ESP32 build flags in `platformio.ini`:
 
@@ -272,7 +274,7 @@ scripts/               Native compiler/coverage integration
 
 Core code uses injected interfaces, fixed buffers and bounded queues, with no Arduino calls, exceptions, or dynamic allocation. Hardware startup may allocate UART buffers. Every duration check uses unsigned subtraction; service the loop regularly (well within the 32-bit millis wrap period, about 49.7 days). Long loop stalls advance at most one state per update, preserving a visible interval for each state. Animation skips missed frames without an unbounded catch-up loop.
 
-There are no application `delay()` calls or busy waits. Serial input, UART receive, and log transmission each have per-loop budgets. Logs use a bounded buffer, drop excess whole messages, and report overflow when the buffer drains. Each LED frame uses only GPIO writes; the reward animation and final yellow warning do not block sensor or audio updates.
+There are no application `delay()` calls or busy waits. Serial input, UART receive, and log transmission each have per-loop budgets. Logs use a bounded buffer, drop excess whole messages, and report overflow when the buffer drains. Each fade update writes nine hardware PWM duties; the reward animation and final yellow warning do not block sensor or audio updates.
 
 ## Automated tests and coverage
 
@@ -289,9 +291,9 @@ python -m unittest discover -s test_host -v
 
 On Linux, the script uses GCC's `gcov`; on macOS it uses Apple Clang and `xcrun llvm-cov gcov`. If using a different compiler version, set `GCOV` to the matching coverage executable, e.g. `GCOV=gcov-14 python scripts/coverage.py`. Compiler versions can produce slightly different branch totals. Do not merge counters from different source versions or compilers; the script cleans them first.
 
-The tests cover state transitions, −1/exact/+1 timing boundaries and rollover; randomized reward-track bounds and repeat avoidance; early/held/repeated high-fives; actual debounce bounce sequences; RGB pair selection, the final yellow warning, off/color rotation, animation cancellation and restart; fixed UART frames, fragmented/corrupt input, bounded RX, command pacing/queue overflow, initialization/runtime failures, volume limits and stop delivery after a health timeout; malformed serial input, boot defaults, and strict mode isolation. An integration test runs the real controller, diagnostics, sensor, RGB pair frames and audio driver together through fake electrical IO.
+The tests cover state transitions, −1/exact/+1 timing boundaries and rollover; randomized reward-track bounds and repeat avoidance; early/held/repeated high-fives; actual debounce bounce sequences; RGB pair selection, the final yellow warning, seeded repeatability, successive animation variation, smooth fade deltas, full-spectrum targets, animation cancellation and restart; fixed UART frames, fragmented/corrupt input, bounded RX, command pacing/queue overflow, initialization/runtime failures, volume limits and stop delivery after a health timeout; malformed serial input, boot defaults, and strict mode isolation. An integration test runs the real controller, diagnostics, sensor, RGB pair frames and audio driver together through fake electrical IO.
 
-GitHub Actions runs native tests/coverage and host importer/conversion tests on Linux and macOS and builds the ESP32 firmware on Linux for pushes and pull requests. It publishes coverage reports and firmware binaries as workflow artifacts. A host test compiles the production GPIO adapter against a recording Arduino stub and checks initialization, active-low polarity, pin mapping and all 512 nine-channel combinations; it does not measure real electrical behavior. The importer tests include real WAV, MP3, FLAC and M4A conversion, arbitrary/Unicode filenames, read-back hashes, corrupt input, and safe library replacement.
+GitHub Actions runs native tests/coverage and host importer/conversion tests on Linux and macOS and builds the ESP32 firmware on Linux for pushes and pull requests. It publishes coverage reports and firmware binaries as workflow artifacts. A host test compiles the production GPIO adapter against a recording Arduino stub and checks PWM initialization, active-low polarity, pin/channel mapping, gamma correction and setup failure; it does not measure real electrical behavior. The importer tests include real WAV, MP3, FLAC and M4A conversion, arbitrary/Unicode filenames, read-back hashes, corrupt input, and safe library replacement.
 
 ## Hardware bring-up checklist
 
@@ -300,7 +302,7 @@ Make connections with power off. Use one stage at a time; a missing MP3 module m
 1. **Set LM2596 to 5.0 V.** Leave the ESP32, MP3 and LEDs disconnected. Apply the 12 V supply, verify jack polarity, set/measure buck output, then turn power off. Check the output again under load later.
 2. **Power ESP32 only.** Use USB with the external feed isolated as described above. Build/upload, open 115200-baud monitor, reset, verify the menu and boot timeout. Resolve USB/external power isolation before live externally powered tests.
 3. **SENSOR TEST (`4`).** With power off, wire DB1 COM/1 → GND and NO/4 → GPIO27; leave NC/2 disconnected. No switch power wire is needed. Verify RELEASED → PRESSED + exactly one HIGH FIVE EVENT → RELEASED. Hold it for several seconds: no repeated events. Test repeated presses and the mounted hand; tune debounce only if needed.
-4. **LIGHTS TEST (`2`).** First verify each LED's common-anode/R/G/B pinout. Connect all six common anodes to 3V3, and each color cathode through its own 470 Ω resistor to the GPIO in the pair table (18 series resistors total). Add the nine GPIO pull-ups. Check top red, middle mixed yellow, bottom green, off and cycle. With `dance`, every pair must show red, green and blue in turn, with both LEDs matching. Measure currents and check mixed-yellow visibility, blue/green brightness, and off behavior during reset. Sensor/MP3 are not required; use USB-only ESP32 power with the external feed isolated.
+4. **LIGHTS TEST (`2`).** First verify each LED's common-anode/R/G/B pinout. Connect all six common anodes to 3V3, and each color cathode through its own 470 Ω resistor to the GPIO in the pair table (18 series resistors total). Add the nine GPIO pull-ups. Check top red, middle mixed yellow, bottom green, off and cycle. With `dance`, verify slow, continuous full-spectrum fades with no visible PWM flicker, abrupt black frames or fixed repeating sequence; both LEDs in each pair must match. Measure currents and check mixed-yellow visibility, blue/green brightness, and off behavior during reset. Sensor/MP3 are not required; use USB-only ESP32 power with the external feed isolated.
 5. **YX5200 AUDIO TEST (`3`).** Insert the prepared card while unpowered; connect 5V/GND/UART. Leave amplifier/speaker disconnected initially. Wait for verified `[OK] YX5200`, then try `play 1`, `pause`, `resume`, `stop`, `volume 12`, and `status`. UART success alone does not establish audible output.
 6. **PAM8610 and speaker.** Power off, add resistor-summed DAC line audio to the left input and speaker across L+/L−. Power the amplifier from switched 12 V. Start its gain low. Repeat AUDIO TEST, listen for clean sound, and measure 5 V/12 V under playback load. Check for hot components or reset/brownout behavior. Never rewire speaker outputs while energized.
 7. **SEQUENCE TEST (`5`).** Verify red (3 s), yellow (1 s), green (indefinite), then `highfive` → reward animation → yellow at 26 s → stop and red at 30 s. Confirm the next green waits for a new press. This mode requires no physical peripheral and does not play actual audio or drive LEDs.

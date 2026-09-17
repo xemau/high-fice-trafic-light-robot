@@ -19,7 +19,7 @@ Status: **not yet performed on physical hardware**. Native tests and a successfu
 - [ ] ESP32 USB-only boot, upload and serial menu.
 - [ ] SENSOR TEST: DB1 released HIGH / pressed LOW; repeated press/release, bounce, hold, second press, mounted hand; verify low-current contact reliability.
 - [ ] LIGHTS TEST: top red, middle red+green yellow, bottom green; only the selected pair lights.
-- [ ] Both LEDs of every pair match; dance cycles each pair through red, green and blue.
+- [ ] Both LEDs of every pair match; dance uses slow full-spectrum fades with no visible PWM flicker, abrupt black frames or fixed repeating sequence.
 - [ ] FULL mode: at 26 seconds of reward, only the middle yellow pair remains on; at 30 seconds audio stops and red turns on.
 - [ ] All channels off during reset and on `off`; verify resistor currents, mixed-yellow hue and blue/green brightness at 3.3 V.
 - [ ] AUDIO TEST: verified UART initialization, play/pause/resume/stop, volume, next/previous.

@@ -3,6 +3,7 @@
 #include "core/TrafficLight.h"
 #include "core/YX5200AudioPlayer.h"
 #include "hardware/Esp32Adapters.h"
+#include <esp_system.h>
 
 namespace {
 struct Application {
@@ -24,6 +25,7 @@ Application& app() {
 }
 
 void setup() {
+    app().lights.seedAnimation(esp_random());
     app().console.begin();
     app().menu.begin();
 }

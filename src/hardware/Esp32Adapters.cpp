@@ -20,19 +20,25 @@ bool Esp32Uart::write(const uint8_t* bytes, std::size_t size) {
 }
 
 bool Esp32LedOutputs::begin() {
+    uint8_t channel = 0;
     for (const auto& pair : Config::Pins::LedRgb) for (const auto pin : pair) {
         digitalWrite(pin, HIGH);
         pinMode(pin, OUTPUT);
+        if (!ledcSetup(channel, Config::LedPwmHz, Config::LedPwmBits)) return false;
+        ledcAttachPin(pin, channel);
+        ledcWrite(channel, 255);
+        ++channel;
     }
     return true;
 }
 void Esp32LedOutputs::write(const LedFrame& frame) {
-    // Common-anode channels are active low; blank the old frame first.
-    for (const auto& pair : Config::Pins::LedRgb) for (const auto pin : pair) digitalWrite(pin, HIGH);
+    uint8_t channel = 0;
     for (std::size_t i = 0; i < frame.size(); ++i) {
-        if (frame[i].red) digitalWrite(Config::Pins::LedRgb[i][0], LOW);
-        if (frame[i].green) digitalWrite(Config::Pins::LedRgb[i][1], LOW);
-        if (frame[i].blue) digitalWrite(Config::Pins::LedRgb[i][2], LOW);
+        const uint8_t brightness[] = {frame[i].red, frame[i].green, frame[i].blue};
+        for (const auto value : brightness) {
+            const uint32_t gammaCorrected = (static_cast<uint32_t>(value) * value + 127) / 255;
+            ledcWrite(channel++, 255 - gammaCorrected);
+        }
     }
 }
 

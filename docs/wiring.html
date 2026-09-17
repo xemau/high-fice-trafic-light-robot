@@ -912,8 +912,10 @@ NC / 2: unused; insulate this terminal.
         yellow pair remains on. At the deadline, firmware queues an audio stop
         and shows red; audible timing includes UART/module latency. After red and yellow, green waits
         indefinitely for a new press. Manual AUDIO TEST playback and boot/error sounds do not have
-        this reward timeout. Before the warning, animation rotates red, green and blue across the
-        three pairs every 80ms; both LEDs in each pair match.</p>
+        this reward timeout. Before the warning, seeded full-spectrum colors fade across the three
+        pairs over randomized 2–3.5 second transitions. The nine channels use 5kHz PWM with 20ms
+        brightness updates; there are no deliberate black frames or sudden strobes, and both LEDs
+        in each pair match.</p>
         <table class="pin-table">
             <caption>FAT32 / MBR card, volume ROBOT — inserted into the YX5200 while unpowered</caption>
             <thead><tr><th scope="col">Sound</th><th scope="col">Playback file</th><th scope="col">Source / archive</th></tr></thead>
