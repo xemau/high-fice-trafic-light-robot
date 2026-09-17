@@ -29,6 +29,7 @@ constexpr uint32_t AnimationMs = 80;
 constexpr uint32_t LightCycleMs = 1000;
 constexpr uint32_t SelectionMs = 5000;
 constexpr int DefaultVolume = 12;
+constexpr uint8_t DefaultEqualizer = 1; // YX5200: Normal=0, Pop=1, Rock=2, Jazz=3, Classic=4, Bass=5.
 constexpr uint16_t RewardTrack = 1;
 constexpr uint16_t BootTrack = 2998;
 constexpr uint16_t ErrorTrack = 2999;
@@ -46,6 +47,7 @@ constexpr std::size_t LogBufferSize = 2048;
 constexpr auto DefaultMode = static_cast<AppMode>(DEFAULT_APP_MODE);
 static_assert(DEFAULT_APP_MODE >= 1 && DEFAULT_APP_MODE <= 5, "DEFAULT_APP_MODE must be 1..5");
 static_assert(DefaultVolume >= 0 && DefaultVolume <= MaxVolume);
+static_assert(DefaultEqualizer <= 5);
 static_assert(RewardTrack >= 1 && RewardTrack <= MaxTrack);
 static_assert(BootTrack > RewardTrack && ErrorTrack > RewardTrack && BootTrack != ErrorTrack);
 static_assert(BootTrack <= MaxTrack && ErrorTrack <= MaxTrack);

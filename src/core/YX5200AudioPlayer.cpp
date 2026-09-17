@@ -2,6 +2,13 @@
 #include "core/Timing.h"
 #include <cstdio>
 
+namespace {
+constexpr std::array<Mp3Frame, 6> Initialization{{
+    {0x16, 0}, {0x09, 2}, {0x06, Config::DefaultVolume},
+    {0x1a, 0}, {0x07, Config::DefaultEqualizer}, {0x43, 0}
+}};
+}
+
 Mp3Bytes encodeMp3Frame(uint8_t command, uint16_t parameter) {
     Mp3Bytes bytes{{0x7e, 0xff, 0x06, command, 0,
                    static_cast<uint8_t>(parameter >> 8), static_cast<uint8_t>(parameter), 0, 0, 0xef}};
@@ -108,7 +115,7 @@ void YX5200AudioPlayer::receive(const Mp3Frame& frame) {
         } else fail(message);
     } else if (frame.command == 0x3b && (frame.parameter & 2)) {
         fail("[ERROR] YX5200 SD card removed");
-    } else if (status_ == AudioStatus::Starting && initStep_ == 5 &&
+    } else if (status_ == AudioStatus::Starting && initStep_ == Initialization.size() &&
                frame.command == 0x43 && frame.parameter == Config::DefaultVolume) {
         status_ = AudioStatus::Ready;
         queriedAt_ = clock_.now();
@@ -135,10 +142,9 @@ void YX5200AudioPlayer::update() {
     }
     if (status_ == AudioStatus::Starting) {
         if (!elapsed(now, startedAt_, Config::AudioBootMs)) return;
-        if (initStep_ < 5 && elapsed(now, lastSent_, Config::AudioCommandMs)) {
-            const Mp3Frame init[] = {{0x16, 0}, {0x09, 2}, {0x06, Config::DefaultVolume}, {0x1a, 0}, {0x43, 0}};
-            if (send(init[initStep_].command, init[initStep_].parameter)) ++initStep_;
-        } else if (initStep_ == 5 && elapsed(now, lastSent_, Config::AudioResponseMs)) {
+        if (initStep_ < Initialization.size() && elapsed(now, lastSent_, Config::AudioCommandMs)) {
+            if (send(Initialization[initStep_].command, Initialization[initStep_].parameter)) ++initStep_;
+        } else if (initStep_ == Initialization.size() && elapsed(now, lastSent_, Config::AudioResponseMs)) {
             fail("[ERROR] YX5200 initialization failed (volume response timeout)");
         }
         return;

@@ -172,7 +172,7 @@ void full_integration_with_real_core_and_fake_electrical_io() {
     DiagnosticController diagnostics(clock, sensor, audio, lights, log);
     diagnostics.begin(AppMode::Full);
     clock.advance(Config::AudioBootMs); diagnostics.update();
-    for (int i = 0; i < 4; ++i) { clock.advance(Config::AudioCommandMs); diagnostics.update(); }
+    for (int i = 0; i < 5; ++i) { clock.advance(Config::AudioCommandMs); diagnostics.update(); }
     uart.respond(0x43, Config::DefaultVolume); diagnostics.update();
     clock.advance(Config::AudioCommandMs); diagnostics.update();
     TEST_ASSERT_EQUAL_INT(RobotState::GreenWaiting, diagnostics.robotState());

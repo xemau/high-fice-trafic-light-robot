@@ -187,7 +187,7 @@ Boot-held switches are displayed as pressed but generate no high-five until rele
 
 ### Audio initialization and errors
 
-`begin()` starts asynchronous initialization, not a blocking success check. After a 3-second module settling period, the driver sends stop, select TF/SD, conservative volume, DAC enable, and a volume query, at least 200 ms apart. `[OK] YX5200` requires a valid checksummed volume reply matching the configured startup volume. A reply timeout produces `[ERROR] YX5200 initialization failed`; UART failure, SD removal, module errors, and runtime disconnects are also logged. FULL continues processing LEDs, sensor, timing, and diagnostics if audio fails.
+`begin()` starts asynchronous initialization, not a blocking success check. After a 3-second module settling period, the driver sends stop, select TF/SD, configured volume, DAC enable, the configured YX5200 equalizer preset, and a volume query, at least 200 ms apart. `[OK] YX5200` requires a valid checksummed volume reply matching the configured startup volume. The EQ command is requested but not verified by that handshake. A reply timeout produces `[ERROR] YX5200 initialization failed`; UART failure, SD removal, module errors, and runtime disconnects are also logged. FULL continues processing LEDs, sensor, timing, and diagnostics if audio fails.
 
 Runtime commands go into a fixed eight-entry queue and return success **only for acceptance**, not audible playback. Invalid volumes/tracks, failed/not-ready audio, and queue overflow return failure. Commands do not wait for ACKs. The driver parses error/finish notifications and polls status every 5 seconds with a 1.5-second response timeout. Missing-file/out-of-range replies (module errors 5/6) after initialization keep the link usable and raise a one-shot error event; other module errors fail the driver. `status` reports cached driver health; there is no claim that the speaker is connected or that a file exists. Repair wiring/card issues and send `retry` to restart initialization. Commands received before audio is ready are rejected rather than replayed unexpectedly later. Stop discards pending playback and takes priority over health polling at the next permitted transmit slot.
 
@@ -230,7 +230,7 @@ The driver directly implements the YX5200/DFPlayer-compatible 10-byte protocol a
 
 ## Configuration and architecture
 
-All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB GPIOs, sensor/UART GPIOs, UART number/baud, serial baud, animation/cycle timings, state durations, debounce, reward track, volume, boot selection, UART pacing/timeouts/queue capacity, and serial buffer limits.
+All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB GPIOs, sensor/UART GPIOs, UART number/baud, serial baud, animation/cycle timings, state durations, debounce, reward track, volume, YX5200 equalizer preset, boot selection, UART pacing/timeouts/queue capacity, and serial buffer limits.
 
 | Setting | Default |
 | --- | --- |
@@ -246,6 +246,7 @@ All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB
 | Debounce | 30 ms |
 | Reward / boot / error track | 1 / 2998 / 2999 |
 | Initial volume | 12 (supported volume range 0–30) |
+| YX5200 equalizer | Pop / 1 (Normal=0, Pop=1, Rock=2, Jazz=3, Classic=4, Bass=5) |
 | Boot selection timeout / default | 5000 ms / FULL |
 
 To remap the LEDs, edit `Config::Pins::LedRgb`: rows are top/middle/bottom pairs and columns are R/G/B. Compile-time checks reject duplicate pins, sensor/UART conflicts and pins outside the safe output list. RobotController needs no changes. Channels are on/off, not PWM; brightness and mixed-yellow balance depend on the LED/resistor combination. Initialization sets all nine outputs HIGH (off), and each frame blanks all channels before pulling the selected cathodes LOW. Recommended external pull-ups keep them off before initialization.
