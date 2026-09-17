@@ -111,15 +111,19 @@ void missing_track_keeps_error_sound_playable_without_recursion() {
     TEST_ASSERT_EQUAL_INT(AudioStatus::Failed, starting.audio.status());
     TEST_ASSERT_TRUE(starting.audio.takeError());
 }
-void health_poll_response_and_disconnect() {
+void health_poll_response_and_unsupported_timeout() {
     Rig r; r.ready(); r.tick(Config::AudioPollMs); r.last(0x42);
     r.uart.respond(0x42, 0x0201); r.audio.update();
     r.tick(Config::AudioResponseMs); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
     r.tick(Config::AudioPollMs); r.last(0x42);
     r.tick(Config::AudioResponseMs - 1); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
-    r.tick(1); TEST_ASSERT_EQUAL_INT(AudioStatus::Failed, r.audio.status());
-    TEST_ASSERT_TRUE(r.log.contains("disconnected"));
-    TEST_ASSERT_TRUE(r.audio.stop()); r.last(0x16);
+    r.tick(1); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
+    TEST_ASSERT_TRUE(r.log.contains("polling disabled"));
+    TEST_ASSERT_FALSE(r.audio.takeError());
+    const auto sent = r.uart.tx.size();
+    r.tick(Config::AudioPollMs + Config::AudioResponseMs);
+    TEST_ASSERT_EQUAL(sent, r.uart.tx.size());
+    TEST_ASSERT_TRUE(r.audio.playTrack(2)); r.tick(); r.last(0x12, 2);
 }
 void partial_frames_timeout_and_bounded_rx() {
     Rig r; r.query(); const auto bytes = encodeMp3Frame(0x43, Config::DefaultVolume);
@@ -145,7 +149,7 @@ int main() {
     UNITY_BEGIN(); RUN_TEST(protocol_known_frame_and_large_track); RUN_TEST(parser_rejects_corruption_and_resynchronizes);
     RUN_TEST(startup_pacing_verifies_volume_not_just_ack); RUN_TEST(all_commands_and_volume_validation);
     RUN_TEST(queue_overflow_and_stop_priority); RUN_TEST(missing_module_timeout_retry_and_transport_failure);
-    RUN_TEST(device_error_sd_removal_finish_and_unrelated_frames); RUN_TEST(health_poll_response_and_disconnect);
+    RUN_TEST(device_error_sd_removal_finish_and_unrelated_frames); RUN_TEST(health_poll_response_and_unsupported_timeout);
     RUN_TEST(partial_frames_timeout_and_bounded_rx); RUN_TEST(startup_and_poll_rollover);
     RUN_TEST(missing_track_keeps_error_sound_playable_without_recursion);
     return UNITY_END();

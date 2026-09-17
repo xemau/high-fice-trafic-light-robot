@@ -186,9 +186,11 @@ void full_integration_with_real_core_and_fake_electrical_io() {
     while (clock.now() - rewardStartedAt < Config::RewardMs - 1) {
         const auto remaining = Config::RewardMs - 1 - (clock.now() - rewardStartedAt);
         clock.advance(remaining < 100 ? remaining : 100);
-        uart.respond(0x42, 0x0201); diagnostics.update();
+        diagnostics.update();
         TEST_ASSERT_EQUAL_INT(RobotState::Reward, diagnostics.robotState());
     }
+    TEST_ASSERT_TRUE(log.contains("runtime polling disabled"));
+    TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, audio.status());
     TEST_ASSERT_TRUE(outputs.frame[1].red); TEST_ASSERT_TRUE(outputs.frame[1].green);
     TEST_ASSERT_FALSE(outputs.frame[1].blue);
     for (std::size_t i : {0u, 2u}) {
@@ -206,6 +208,14 @@ void full_integration_with_real_core_and_fake_electrical_io() {
         TEST_ASSERT_FALSE(outputs.frame[i].red);
         TEST_ASSERT_FALSE(outputs.frame[i].green); TEST_ASSERT_FALSE(outputs.frame[i].blue);
     }
+    clock.advance(Config::RedMs); diagnostics.update();
+    clock.advance(Config::YellowMs); diagnostics.update();
+    TEST_ASSERT_EQUAL_INT(RobotState::GreenWaiting, diagnostics.robotState());
+    diagnostics.command(parseCommand("highfive")); diagnostics.update();
+    TEST_ASSERT_EQUAL_INT(RobotState::Reward, diagnostics.robotState());
+    clock.advance(Config::AudioCommandMs); diagnostics.update();
+    TEST_ASSERT_EQUAL(0x12, uart.tx.back()[3]);
+    TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, audio.status());
 }
 void boot_sound_once_after_ready_and_diagnostic_system_commands() {
     Rig r; r.diagnostics.begin(AppMode::Full); r.audio.state = AudioStatus::Starting;

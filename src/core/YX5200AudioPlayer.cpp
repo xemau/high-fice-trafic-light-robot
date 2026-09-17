@@ -56,6 +56,7 @@ bool YX5200AudioPlayer::begin() {
     head_ = count_ = 0;
     initStep_ = 0;
     awaitingStatus_ = false;
+    pollingEnabled_ = true;
     errorEvent_ = false;
     lastTrack_ = 0;
     uartStarted_ = false;
@@ -155,12 +156,13 @@ void YX5200AudioPlayer::update() {
         return;
     }
     if (awaitingStatus_ && elapsed(now, queriedAt_, Config::AudioResponseMs)) {
-        fail("[ERROR] YX5200 disconnected (status response timeout)");
-        return;
+        awaitingStatus_ = false;
+        pollingEnabled_ = false;
+        log_.log("[WARN] YX5200 status query unsupported; runtime polling disabled");
     }
     if (!elapsed(now, lastSent_, Config::AudioCommandMs)) return;
     const bool stopping = count_ && queue_[head_].command == 0x16;
-    if (!stopping && !awaitingStatus_ && elapsed(now, queriedAt_, Config::AudioPollMs)) {
+    if (pollingEnabled_ && !stopping && !awaitingStatus_ && elapsed(now, queriedAt_, Config::AudioPollMs)) {
         if (send(0x42)) {
             awaitingStatus_ = true;
             queriedAt_ = now;
