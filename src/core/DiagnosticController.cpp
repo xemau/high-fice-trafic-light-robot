@@ -221,6 +221,10 @@ void BootMenu::begin() {
     log_.log("[BOOT] High-Five Robot");
     log_.log("1 - Full robot\n2 - Lights test\n3 - Audio test\n4 - High-five sensor test\n5 - Sequence/state-machine test");
     log_.log("Select mode (number + Enter); timeout starts configured default:");
+    char message[96];
+    std::snprintf(message, sizeof(message), "[BOOT] selection_window_ms=%lu default_mode=%u (1=FULL)",
+                  static_cast<unsigned long>(timeout_), static_cast<unsigned>(default_));
+    log_.log(message);
 }
 
 void BootMenu::update() {
@@ -234,6 +238,7 @@ void BootMenu::update() {
 }
 
 void BootMenu::input(char c) {
+    if (!selected_ && elapsed(clock_.now(), startedAt_, timeout_)) update();
     const auto result = line_.push(c);
     if (result == LineResult::Rejected) log_.log("[ERROR] input line too long or contains invalid bytes");
     if (result != LineResult::Complete) return;

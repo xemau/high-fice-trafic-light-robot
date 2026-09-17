@@ -8,7 +8,7 @@ The ESP32 controls a **YX5200 Mini MP3 module** over UART2; the YX5200 decodes t
 
 ## Status and verification
 
-The ESP32 firmware builds, and 55 native tests pass across six suites, plus 15 host tests for SD preparation, audio conversion/EQ, GPIO output and buffered serial logging. A clean Apple Clang coverage run measured **100% core line coverage and 97.6% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
+The ESP32 firmware builds, and 57 native tests pass across six suites, plus 15 host tests for SD preparation, audio conversion/EQ, GPIO output and buffered serial logging. A clean Apple Clang coverage run measured **100% core line coverage and 97.8% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
 
 Physical commissioning is still required. USB diagnostics have verified YX5200 initialization and status replies, but the reported audible output did not match the requested boot/reward tracks. The SD playback files match their preparation hashes and decode on the laptop; this does not prove the module selects or decodes them correctly. Tests verify application behavior and protocol handling, not actual sound, wiring, switch mechanics or supply stability. Follow the staged bring-up checklist before installing the electronics in cardboard.
 
@@ -167,7 +167,7 @@ Replace the port with the actual USB UART device (`/dev/ttyUSB0` is a common Lin
 
 The dependencies are pinned in `platformio.ini`: Espressif32 6.10.0 and Arduino ESP32 2.0.17 via that platform. LEDs use Arduino GPIO output directly, with no LED library dependency. PlatformIO stores tools locally in `.pio-core/` and builds in `.pio/`. Firmware binaries are under `.pio/build/esp32dev/`. No hardware upload occurs when running native tests.
 
-Open the monitor and press EN/reset to see the boot menu. Send a number **followed by Enter** within 5 seconds. Use a serial terminal that sends LF or CRLF; both are supported. Without a completed selection, the firmware starts FULL automatically and does not wait for a serial connection. With PlatformIO monitor, `--filter send_on_enter` is useful for line editing. Exit the monitor with Ctrl+C before uploading.
+Open the monitor and press EN/reset to see the boot menu. Send a number **followed by Enter** within 10 seconds. Use a serial terminal that sends LF or CRLF; both are supported. Without a completed selection, the firmware starts FULL automatically and does not wait for a serial connection. All modes are compiled into the same firmware; the menu selects runtime behavior, not a separate build. With PlatformIO monitor, `--filter send_on_enter` is useful for line editing. Exit the monitor with Ctrl+C before uploading.
 
 ## Diagnostic modes
 
@@ -213,7 +213,7 @@ For example, a module-reported missing file produces a sequence like this (field
 [YX5200 TX] cmd=0x12 param=2999 ...
 ```
 
-`[COMMAND]` records the completed input and whether it arrived during `boot-menu` or `active` operation. **Enter `3` plus Enter within the five-second boot menu to select AUDIO TEST.** Entering `3` after `[MODE] FULL` is an invalid command, which requests the error sound; it does not switch modes. Reboot to select another mode.
+`[COMMAND]` records the completed input and whether it arrived during `boot-menu` or `active` operation. **Enter `3` plus Enter within the ten-second boot menu to select AUDIO TEST.** Entering `3` after `[MODE] FULL` is an invalid command, which requests the error sound; it does not switch modes. Reboot to select another mode.
 
 After uploading this firmware using the safe power arrangement described above:
 
@@ -306,7 +306,7 @@ All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB
 | Reward / boot / error track | 1 / 2998 / 2999 |
 | Initial / boot / error volume | 12/30 |
 | Music volume | 30/30 (maximum; keep amplifier gain low) |
-| Boot selection timeout / default | 5000 ms / FULL |
+| Boot selection timeout / default | 10000 ms / FULL |
 
 To remap the LEDs, edit `Config::Pins::LedRgb`: rows are top/middle/bottom pairs and columns are R/G/B. Compile-time checks reject duplicate pins, sensor/UART conflicts and pins outside the safe output list. RobotController needs no changes. Channels are on/off, not PWM; brightness and mixed-yellow balance depend on the LED/resistor combination. Initialization sets all nine outputs HIGH (off), and each frame blanks all channels before pulling the selected cathodes LOW. Recommended external pull-ups keep them off before initialization.
 

@@ -62,7 +62,10 @@ void line_buffer_crlf_backspace_overflow_and_recovery() {
     line.push(static_cast<char>(0xff)); TEST_ASSERT_EQUAL_INT(LineResult::Rejected, line.push('\n'));
 }
 void boot_default_boundary_and_no_serial_dependency() {
+    TEST_ASSERT_EQUAL_UINT32(10000, Config::SelectionMs);
+    TEST_ASSERT_EQUAL_INT(AppMode::Full, Config::DefaultMode);
     Rig r; r.menu.begin();
+    TEST_ASSERT_TRUE(r.log.contains("selection_window_ms=10000 default_mode=1"));
     r.clock.advance(Config::SelectionMs - 1); r.menu.update(); TEST_ASSERT_FALSE(r.menu.selected());
     TEST_ASSERT_EQUAL(0, r.sensor.begins); TEST_ASSERT_EQUAL(0, r.audio.begins); TEST_ASSERT_EQUAL(0, r.lights.begins);
     r.clock.advance(1); r.menu.update(); TEST_ASSERT_TRUE(r.menu.selected());
@@ -81,6 +84,23 @@ void boot_selection_invalid_input_timeout_and_wrap() {
     wrapped.clock.advance(2); menu.update(); TEST_ASSERT_TRUE(menu.selected());
     TEST_ASSERT_EQUAL_INT(AppMode::SensorTest, wrapped.diagnostics.mode());
     menu.input('\n'); TEST_ASSERT_FALSE(wrapped.log.contains("invalid command"));
+}
+void boot_accepts_selection_after_five_seconds_before_ten() {
+    Rig r; r.menu.begin(); r.clock.advance(9999); r.menu.update();
+    TEST_ASSERT_FALSE(r.menu.selected());
+    r.input("3\n");
+    TEST_ASSERT_TRUE(r.menu.selected());
+    TEST_ASSERT_EQUAL_INT(AppMode::AudioTest, r.diagnostics.mode());
+    r.clock.advance(1); r.menu.update();
+    TEST_ASSERT_EQUAL_INT(AppMode::AudioTest, r.diagnostics.mode());
+}
+void boot_expired_selection_cannot_override_full_before_update() {
+    Rig r; r.menu.begin(); r.input("2"); r.clock.advance(Config::SelectionMs);
+    r.input("\n");
+    TEST_ASSERT_TRUE(r.menu.selected());
+    TEST_ASSERT_EQUAL_INT(AppMode::Full, r.diagnostics.mode());
+    Rig late; late.menu.begin(); late.clock.advance(Config::SelectionMs + 1); late.input("3\n");
+    TEST_ASSERT_EQUAL_INT(AppMode::Full, late.diagnostics.mode());
 }
 void lights_mode_isolated_and_cycles_with_manual_override() {
     Rig r; r.audio.ok = false; r.sensor.ok = false;
@@ -313,5 +333,7 @@ int main() {
     RUN_TEST(hardware_error_to_sound_is_traceable_without_recursion);
     RUN_TEST(boot_input_logs_explain_late_mode_selection_error_sound);
     RUN_TEST(music_uses_maximum_and_system_sounds_restore_default_volume);
+    RUN_TEST(boot_accepts_selection_after_five_seconds_before_ten);
+    RUN_TEST(boot_expired_selection_cannot_override_full_before_update);
     return UNITY_END();
 }
