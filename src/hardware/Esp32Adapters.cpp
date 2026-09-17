@@ -1,5 +1,6 @@
 #include "hardware/Esp32Adapters.h"
 #include <cstring>
+#include <cstdio>
 
 bool Esp32Input::begin() {
     pinMode(Config::Pins::HighFive, INPUT_PULLUP);
@@ -40,10 +41,14 @@ void SerialConsole::begin() { Serial.begin(Config::SerialBaud); }
 int SerialConsole::read() { return Serial.read(); }
 void SerialConsole::log(const char* message) {
     const auto length = std::strlen(message);
-    if (length + 1 > sizeof(buffer_) - size_) {
+    char timestamp[24];
+    const auto prefix = static_cast<std::size_t>(std::snprintf(timestamp, sizeof(timestamp), "[t=%lu] ",
+                                                             static_cast<unsigned long>(millis())));
+    if (prefix + length + 1 > sizeof(buffer_) - size_) {
         dropped_ = true;
         return;
     }
+    for (std::size_t i = 0; i < prefix; ++i) buffer_[(head_ + size_++) % sizeof(buffer_)] = timestamp[i];
     for (std::size_t i = 0; i < length; ++i) buffer_[(head_ + size_++) % sizeof(buffer_)] = message[i];
     buffer_[(head_ + size_++) % sizeof(buffer_)] = '\n';
 }

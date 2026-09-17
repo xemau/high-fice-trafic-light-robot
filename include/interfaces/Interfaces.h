@@ -24,6 +24,15 @@ struct IHighFiveSensor {
     virtual bool takePress() = 0;
 };
 enum class AudioStatus { Off, Starting, Ready, Failed };
+inline const char* audioStatusName(AudioStatus status) {
+    switch (status) {
+        case AudioStatus::Off: return "off";
+        case AudioStatus::Starting: return "starting";
+        case AudioStatus::Ready: return "ready";
+        case AudioStatus::Failed: return "failed";
+    }
+    return "unknown";
+}
 struct IAudioPlayer {
     virtual ~IAudioPlayer() = default;
     virtual bool begin() = 0;
@@ -37,6 +46,8 @@ struct IAudioPlayer {
     virtual bool previous() = 0;
     virtual AudioStatus status() const = 0;
     virtual bool takeError() { return false; }
+    virtual const char* errorReason() const { return "audio player error"; }
+    virtual void reportDiagnostics() {}
 };
 enum class Lamp { Red, Yellow, Green, Off };
 struct ITrafficLight {

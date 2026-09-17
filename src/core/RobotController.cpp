@@ -13,7 +13,7 @@ const char* RobotController::stateName(RobotState state) {
 }
 
 void RobotController::begin() {
-    if (active_) audio_.stop();
+    if (active_ && !audio_.stop()) log_.log("[ERROR] robot reset could not queue audio stop");
     sensor_.takePress();
     simulated_ = false;
     active_ = true;
@@ -29,9 +29,10 @@ void RobotController::enter(RobotState state) {
         case RobotState::GreenWaiting: lights_.show(Lamp::Green); break;
         case RobotState::Reward: {
             const bool ok = audio_.playTrack(settings_.rewardTrack);
-            char message[64];
-            std::snprintf(message, sizeof(message), "[AUDIO] PLAY %u %s", settings_.rewardTrack,
-                          ok ? "queued" : "unavailable");
+            char message[160];
+            std::snprintf(message, sizeof(message), "[AUDIO] PLAY %u %s reason=high-five reward audio=%s limit_ms=%lu",
+                          static_cast<unsigned>(settings_.rewardTrack), ok ? "queued" : "unavailable",
+                          audioStatusName(audio_.status()), static_cast<unsigned long>(settings_.rewardMs));
             log_.log(message);
             lights_.startAnimation();
             break;
@@ -62,6 +63,7 @@ void RobotController::update() {
             break;
         case RobotState::Reward:
             if (elapsed(now, startedAt_, settings_.rewardMs)) {
+                log_.log("[AUDIO] stop requested reason=reward time limit reached");
                 if (!audio_.stop()) log_.log("[ERROR] audio stop unavailable");
                 enter(RobotState::Red);
             }

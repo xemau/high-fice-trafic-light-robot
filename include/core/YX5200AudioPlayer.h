@@ -10,9 +10,12 @@ class Mp3Parser {
 public:
     bool push(uint8_t byte, Mp3Frame& frame);
     void reset() { size_ = 0; }
+    std::size_t pendingBytes() const { return size_; }
+    uint32_t discardedBytes() const { return discarded_; }
 private:
     Mp3Bytes bytes_{};
     std::size_t size_ = 0;
+    uint32_t discarded_ = 0;
 };
 
 class YX5200AudioPlayer final : public IAudioPlayer {
@@ -30,11 +33,14 @@ public:
     bool previous() override;
     AudioStatus status() const override { return status_; }
     bool takeError() override;
+    const char* errorReason() const override { return lastError_; }
+    void reportDiagnostics() override;
 private:
     bool enqueue(uint8_t command, uint16_t parameter = 0);
     bool send(uint8_t command, uint16_t parameter = 0);
     void receive(const Mp3Frame& frame);
     void fail(const char* reason);
+    void trace(const char* event, uint8_t command, uint16_t parameter, const char* detail);
     IClock& clock_;
     IUart& uart_;
     ILogger& log_;
@@ -46,4 +52,8 @@ private:
     uint8_t initStep_ = 0;
     uint16_t lastTrack_ = 0;
     bool awaitingStatus_ = false, errorEvent_ = false;
+    uint32_t rxBytes_ = 0, rxFrames_ = 0, txFrames_ = 0, partialTimeouts_ = 0;
+    uint32_t lastRxWarning_ = 0, warnedDiscarded_ = 0, warnedTimeouts_ = 0;
+    Mp3Frame lastTx_{}, lastRx_{};
+    char lastError_[192] = "none";
 };

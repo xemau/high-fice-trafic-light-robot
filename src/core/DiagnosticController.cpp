@@ -2,6 +2,10 @@
 #include "core/Timing.h"
 #include <cstdio>
 
+namespace {
+constexpr uint8_t LedError = 1, SensorError = 2, AudioError = 4;
+}
+
 bool DiagnosticController::robotMode() const { return mode_ == AppMode::Full || mode_ == AppMode::SequenceTest; }
 bool DiagnosticController::audioMode() const { return robotMode() || mode_ == AppMode::AudioTest; }
 bool DiagnosticController::lightsMode() const { return robotMode() || mode_ == AppMode::LightsTest; }
@@ -20,22 +24,25 @@ void DiagnosticController::begin(AppMode mode) {
         default: mode_ = AppMode::Full; break;
     }
     bootPending_ = mode_ == AppMode::Full;
-    errorPending_ = false;
+    pendingErrors_ = 0;
     char message[64];
     std::snprintf(message, sizeof(message), "[MODE] %s", name);
     log_.log(message);
     if (lightsMode()) {
         const bool ok = lights().begin();
         log_.log(ok ? "[OK] LEDs (driver initialized)" : "[ERROR] LEDs initialization failed");
-        errorPending_ = !ok;
+        if (!ok) pendingErrors_ |= LedError;
     }
     if (robotMode() || mode_ == AppMode::SensorTest) {
         const bool ok = sensor().begin();
         log_.log(ok ? "[OK] sensor" : "[ERROR] sensor initialization failed");
-        errorPending_ = errorPending_ || !ok;
+        if (!ok) pendingErrors_ |= SensorError;
         wasPressed_ = sensor().pressed();
     }
-    if (audioMode() && !audio().begin()) log_.log("[ERROR] audio initialization failed");
+    if (audioMode() && !audio().begin()) {
+        log_.log("[ERROR] audio initialization failed");
+        pendingErrors_ |= AudioError;
+    }
     if (robotMode()) {
         robot().begin();
         log_.log("[OK] robot ready (audio may still be starting)");
@@ -75,28 +82,56 @@ void DiagnosticController::update() {
     if (audioMode()) updateSounds();
 }
 
-void DiagnosticController::signalError() {
-    if (audioMode() && audio().status() == AudioStatus::Ready) {
-        if (!audio().playTrack(Config::ErrorTrack)) log_.log("[ERROR] error sound unavailable");
+bool DiagnosticController::requestSound(uint16_t track, const char* reason) {
+    const bool enabled = audioMode();
+    const char* result = "suppressed: mode has no audio";
+    bool ok = false;
+    if (enabled) {
+        if (audio().status() != AudioStatus::Ready) result = "suppressed: audio not ready";
+        else {
+            ok = audio().playTrack(track);
+            result = ok ? "queued (not proof of sound)" : "rejected by audio player";
+        }
     }
+    char message[512];
+    std::snprintf(message, sizeof(message), "[SOUND] role=%s track=%u reason=%s result=%s mode=%u state=%s audio=%s",
+                  track == Config::ErrorTrack ? "error" : "boot", static_cast<unsigned>(track), reason, result,
+                  static_cast<unsigned>(mode_), robotMode() ? RobotController::stateName(robotState()) : "unused",
+                  enabled ? audioStatusName(audio().status()) : "unused");
+    log_.log(message);
+    return ok;
+}
+
+void DiagnosticController::signalError(const char* reason) {
+    if (!requestSound(Config::ErrorTrack, reason)) log_.log("[ERROR] error sound unavailable; see SOUND result");
 }
 
 void DiagnosticController::updateSounds() {
-    if (audio().takeError()) errorPending_ = true;
+    if (audio().takeError()) pendingErrors_ |= AudioError;
+    char reason[256]{};
+    if (pendingErrors_) std::snprintf(reason, sizeof(reason), "%s%s%s",
+                  pendingErrors_ & LedError ? "LED initialization failed; " : "",
+                  pendingErrors_ & SensorError ? "sensor initialization failed; " : "",
+                  pendingErrors_ & AudioError ? audio().errorReason() : "");
     if (audio().status() == AudioStatus::Failed) {
-        bootPending_ = errorPending_ = false;
+        if (pendingErrors_) signalError(reason);
+        if (bootPending_) requestSound(Config::BootTrack, "startup cancelled: audio failed");
+        bootPending_ = false;
+        pendingErrors_ = 0;
         return;
     }
     if (audio().status() != AudioStatus::Ready) return;
-    if (errorPending_) {
-        signalError();
-        bootPending_ = errorPending_ = false;
+    if (pendingErrors_) {
+        signalError(reason);
+        if (bootPending_) log_.log("[SOUND] role=boot result=suppressed reason=pending error takes priority");
+        bootPending_ = false;
+        pendingErrors_ = 0;
     } else if (bootPending_) {
         bootPending_ = false;
         // A late audio startup must not interrupt an already-started reward.
         if (robotState() != RobotState::Reward) {
-            if (!audio().playTrack(Config::BootTrack)) log_.log("[ERROR] boot sound unavailable");
-        }
+            if (!requestSound(Config::BootTrack, "automatic startup")) log_.log("[ERROR] boot sound unavailable");
+        } else log_.log("[SOUND] role=boot result=suppressed reason=reward already active");
     }
 }
 
@@ -111,19 +146,12 @@ void DiagnosticController::help() {
 
 void DiagnosticController::reportStatus() {
     char message[128];
-    const char* audio = "unused";
-    if (audioMode()) {
-        switch (this->audio().status()) {
-            case AudioStatus::Off: audio = "off"; break;
-            case AudioStatus::Starting: audio = "starting"; break;
-            case AudioStatus::Ready: audio = "ready"; break;
-            case AudioStatus::Failed: audio = "failed"; break;
-        }
-    }
+    const char* audio = audioMode() ? audioStatusName(this->audio().status()) : "unused";
     std::snprintf(message, sizeof(message), "[STATUS] mode=%u state=%s audio=%s sensor=%s",
                   static_cast<unsigned>(mode_), robotMode() ? RobotController::stateName(robotState()) : "unused",
                   audio, robotMode() || mode_ == AppMode::SensorTest ? (sensor().pressed() ? "pressed" : "released") : "unused");
     log_.log(message);
+    if (audioMode()) this->audio().reportDiagnostics();
 }
 
 void DiagnosticController::command(Command cmd) {
@@ -170,8 +198,8 @@ void DiagnosticController::command(Command cmd) {
             case CommandType::Next: ok = audio().next(); break;
             case CommandType::Previous: ok = audio().previous(); break;
             case CommandType::Retry: ok = audio().begin(); break;
-            case CommandType::BootSound: ok = audio().playTrack(Config::BootTrack); break;
-            case CommandType::ErrorSound: ok = audio().playTrack(Config::ErrorTrack); break;
+            case CommandType::BootSound: ok = requestSound(Config::BootTrack, "manual boot command"); break;
+            case CommandType::ErrorSound: ok = requestSound(Config::ErrorTrack, "manual error command"); break;
             default: handled = false; break;
         }
         if (handled) {
@@ -180,7 +208,7 @@ void DiagnosticController::command(Command cmd) {
         }
     }
     log_.log("[ERROR] invalid command or unavailable in this mode; type help");
-    signalError();
+    signalError("invalid command or command unavailable in selected mode");
 }
 
 void BootMenu::begin() {
@@ -196,6 +224,7 @@ void BootMenu::update() {
     if (!selected_ && elapsed(clock_.now(), startedAt_, timeout_)) {
         selected_ = true;
         line_ = LineBuffer{};
+        log_.log("[BOOT] selection timeout; starting configured default mode");
         diagnostics_.begin(default_);
     }
     if (selected_) diagnostics_.update();
@@ -205,6 +234,10 @@ void BootMenu::input(char c) {
     const auto result = line_.push(c);
     if (result == LineResult::Rejected) log_.log("[ERROR] input line too long or contains invalid bytes");
     if (result != LineResult::Complete) return;
+    char message[Config::SerialLineSize + 48];
+    std::snprintf(message, sizeof(message), "[COMMAND] phase=%s input=\"%s\"",
+                  selected_ ? "active" : "boot-menu", line_.text());
+    log_.log(message);
     const auto cmd = parseCommand(line_.text());
     if (selected_) diagnostics_.command(cmd);
     else if (cmd.type == CommandType::SelectMode) {

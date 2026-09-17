@@ -231,6 +231,54 @@ void delayed_or_failed_boot_cue_does_not_interrupt_reward() {
     Rig unavailable; unavailable.diagnostics.begin(AppMode::Full); unavailable.audio.ok = false;
     unavailable.diagnostics.update(); TEST_ASSERT_TRUE(unavailable.log.contains("boot sound unavailable"));
 }
+void sound_logs_explain_manual_automatic_and_suppressed_cues() {
+    Rig r; r.diagnostics.begin(AppMode::Full); r.diagnostics.update();
+    TEST_ASSERT_TRUE(r.log.contains("role=boot track=2998 reason=automatic startup"));
+    r.command("error"); TEST_ASSERT_TRUE(r.log.contains("role=error track=2999 reason=manual error command"));
+    r.command("boot"); TEST_ASSERT_TRUE(r.log.contains("reason=manual boot command"));
+    r.command("invalid"); TEST_ASSERT_TRUE(r.log.contains("reason=invalid command or command unavailable"));
+    r.audio.state = AudioStatus::Failed; r.command("error");
+    TEST_ASSERT_TRUE(r.log.contains("result=suppressed: audio not ready"));
+    Rig isolated; isolated.diagnostics.begin(AppMode::LightsTest); isolated.command("error");
+    TEST_ASSERT_TRUE(isolated.log.contains("result=suppressed: mode has no audio"));
+    TEST_ASSERT_EQUAL(0, isolated.audio.plays);
+    Rig failed; failed.lights.ok = failed.sensor.ok = false; failed.diagnostics.begin(AppMode::Full);
+    failed.diagnostics.update();
+    TEST_ASSERT_TRUE(failed.log.contains("reason=LED initialization failed; sensor initialization failed;"));
+    TEST_ASSERT_TRUE(failed.log.contains("reason=pending error takes priority"));
+    failed.audio.error = true; failed.diagnostics.update();
+    TEST_ASSERT_TRUE(failed.log.contains("reason=audio player error"));
+}
+void hardware_error_to_sound_is_traceable_without_recursion() {
+    FakeClock clock; FakeSensor sensor; FakeUart uart; FakeLights lights; FakeLog log;
+    YX5200AudioPlayer audio(clock, uart, log);
+    DiagnosticController diagnostics(clock, sensor, audio, lights, log);
+    diagnostics.begin(AppMode::AudioTest);
+    clock.advance(Config::AudioBootMs); diagnostics.update();
+    for (int i = 0; i < 4; ++i) { clock.advance(Config::AudioCommandMs); diagnostics.update(); }
+    uart.respond(0x43, Config::DefaultVolume); diagnostics.update();
+    diagnostics.command(parseCommand("play 1")); clock.advance(Config::AudioCommandMs); diagnostics.update();
+    uart.respond(0x40, 6); diagnostics.update();
+    TEST_ASSERT_TRUE(log.contains("role=error track=2999 reason=[ERROR] YX5200 module error 6"));
+    clock.advance(Config::AudioCommandMs); diagnostics.update();
+    TEST_ASSERT_EQUAL(0x12, uart.tx.back()[3]);
+    TEST_ASSERT_EQUAL(Config::ErrorTrack, (uart.tx.back()[5] << 8) | uart.tx.back()[6]);
+    const auto sent = uart.tx.size();
+    uart.respond(0x40, 6); diagnostics.update(); clock.advance(Config::AudioCommandMs); diagnostics.update();
+    TEST_ASSERT_EQUAL(sent, uart.tx.size()); TEST_ASSERT_TRUE(log.contains("no recursive error cue"));
+    diagnostics.command(parseCommand("status")); TEST_ASSERT_TRUE(log.contains("[YX5200 STATUS]"));
+    uart.respond(0x3b, 2); diagnostics.update();
+    TEST_ASSERT_TRUE(log.contains("reason=[ERROR] YX5200 SD card removed result=suppressed"));
+    const auto logged = log.messages.size(); diagnostics.update(); TEST_ASSERT_EQUAL(logged, log.messages.size());
+}
+void boot_input_logs_explain_late_mode_selection_error_sound() {
+    Rig r; r.menu.begin(); r.clock.advance(Config::SelectionMs); r.menu.update(); r.input("3\n");
+    TEST_ASSERT_TRUE(r.log.contains("selection timeout"));
+    TEST_ASSERT_TRUE(r.log.contains("phase=active input=\"3\""));
+    TEST_ASSERT_TRUE(r.log.contains("role=error track=2999 reason=invalid command"));
+    Rig selected; selected.menu.begin(); selected.input("3\n");
+    TEST_ASSERT_TRUE(selected.log.contains("phase=boot-menu input=\"3\""));
+}
 int main() {
     UNITY_BEGIN(); RUN_TEST(parser_valid_commands); RUN_TEST(parser_rejects_malformed_input);
     RUN_TEST(line_buffer_crlf_backspace_overflow_and_recovery); RUN_TEST(boot_default_boundary_and_no_serial_dependency);
@@ -241,5 +289,8 @@ int main() {
     RUN_TEST(boot_sound_once_after_ready_and_diagnostic_system_commands);
     RUN_TEST(error_cues_are_one_shot_and_unavailable_audio_does_not_recurse);
     RUN_TEST(delayed_or_failed_boot_cue_does_not_interrupt_reward);
+    RUN_TEST(sound_logs_explain_manual_automatic_and_suppressed_cues);
+    RUN_TEST(hardware_error_to_sound_is_traceable_without_recursion);
+    RUN_TEST(boot_input_logs_explain_late_mode_selection_error_sound);
     return UNITY_END();
 }

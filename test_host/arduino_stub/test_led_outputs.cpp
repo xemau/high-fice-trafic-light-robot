@@ -5,12 +5,37 @@
 struct Event { char operation; uint8_t pin, value; };
 std::vector<Event> events;
 HardwareSerial Serial;
-uint32_t millis() { return 0; }
+uint32_t currentTime = 0;
+uint32_t millis() { return currentTime; }
 void pinMode(uint8_t pin, uint8_t mode) { events.push_back({'m', pin, mode}); }
 void digitalWrite(uint8_t pin, uint8_t value) { events.push_back({'w', pin, value}); }
 int digitalRead(uint8_t) { return HIGH; }
 
 int main() {
+    SerialConsole console;
+    currentTime = 1234;
+    console.log("[SOUND] role=error reason=manual error command");
+    Serial.writeSpace = 0;
+    console.update();
+    assert(Serial.output.empty());
+    Serial.writeSpace = 64;
+    console.update();
+    assert(Serial.output == "[t=1234] [SOUND] role=error reason=manual error command\n");
+    Serial.output.clear();
+    console.log(std::string(Config::LogBufferSize, 'x').c_str());
+    console.log("kept");
+    for (int i = 0; i < 100; ++i) console.update();
+    assert(Serial.output.find("[t=1234] kept\n") == 0);
+    assert(Serial.output.find("serial log overflow") != std::string::npos);
+    assert(Serial.output.find("xxx") == std::string::npos);
+    Serial.output.clear();
+    currentTime = UINT32_MAX;
+    const std::string longMessage(100, 'a');
+    console.log(longMessage.c_str());
+    console.update();
+    assert(Serial.output.size() == Config::IoBudget);
+    console.update();
+    assert(Serial.output == "[t=4294967295] " + longMessage + "\n");
     constexpr uint8_t expectedPins[] = {18, 19, 23, 25, 26, 32, 33, 21, 22};
     Esp32LedOutputs outputs;
     assert(outputs.begin());

@@ -1,6 +1,7 @@
 #include <unity.h>
 #include "core/YX5200AudioPlayer.h"
 #include "../support/Fakes.h"
+#include <cstring>
 void setUp() {}
 void tearDown() {}
 struct Rig {
@@ -139,6 +140,70 @@ void startup_and_poll_rollover() {
     for (int i = 0; i < 4; ++i) r.tick();
     r.tick(Config::AudioResponseMs + 1); TEST_ASSERT_EQUAL_INT(AudioStatus::Failed, r.audio.status());
 }
+void logs_track_requests_responses_and_persistent_error_context() {
+    Rig r; r.ready();
+    TEST_ASSERT_TRUE(r.log.contains("baud=9600 rx_gpio=16 tx_gpio=17"));
+    r.audio.playTrack(Config::BootTrack); r.tick();
+    TEST_ASSERT_TRUE(r.log.contains("file=/MP3/2998.mp3"));
+    TEST_ASSERT_TRUE(r.log.contains("cmd=0x12 param=2998"));
+    r.uart.respond(0x3d, 2); r.audio.update();
+    TEST_ASSERT_TRUE(r.log.contains("reported_index=2 last_named_track=2998"));
+    TEST_ASSERT_FALSE(r.audio.takeError());
+    r.uart.respond(0x40, 6); r.audio.update();
+    TEST_ASSERT_TRUE(r.audio.takeError());
+    TEST_ASSERT_NOT_NULL(std::strstr(r.audio.errorReason(), "file not found/mismatch"));
+    r.audio.playTrack(Config::ErrorTrack); r.tick();
+    r.uart.respond(0x40, 6); r.audio.update();
+    TEST_ASSERT_FALSE(r.audio.takeError());
+    TEST_ASSERT_TRUE(r.log.contains("no recursive error cue"));
+    r.audio.reportDiagnostics();
+    TEST_ASSERT_TRUE(r.log.contains("last_tx=0x12/2999 last_rx=0x40/6"));
+    TEST_ASSERT_TRUE(r.log.contains("last_error=[ERROR] YX5200 module error 6"));
+    r.audio.begin(); r.audio.reportDiagnostics();
+    TEST_ASSERT_TRUE(r.log.contains("tx_frames=0 rx_bytes=0 rx_frames=0"));
+    TEST_ASSERT_EQUAL_STRING("none", r.audio.errorReason());
+}
+void rejection_and_transport_logs_identify_the_command() {
+    Rig r; r.audio.playTrack(1);
+    TEST_ASSERT_TRUE(r.log.contains("audio not ready"));
+    r.ready(); r.audio.playTrack(0); r.audio.setVolume(-1);
+    TEST_ASSERT_TRUE(r.log.contains("track outside 1..9999"));
+    TEST_ASSERT_TRUE(r.log.contains("volume=-1 outside 0..30"));
+    for (unsigned i = 0; i < Config::AudioQueueSize; ++i) r.audio.pause();
+    TEST_ASSERT_FALSE(r.audio.playTrack(9)); TEST_ASSERT_TRUE(r.log.contains("command queue full"));
+    r.audio.stop(); TEST_ASSERT_TRUE(r.log.contains("stop discards queued commands"));
+    r.tick(); r.audio.playTrack(9); r.uart.writeOk = false; r.tick();
+    TEST_ASSERT_TRUE(r.log.contains("YX5200 TX_REJECTED"));
+    TEST_ASSERT_TRUE(r.log.contains("cmd=0x12 param=9"));
+    TEST_ASSERT_NOT_NULL(std::strstr(r.audio.errorReason(), "UART write failed"));
+}
+void malformed_rx_is_counted_and_warnings_are_rate_limited() {
+    Rig r; r.ready();
+    r.uart.rx.push_back(0x7e); r.audio.update(); r.tick(Config::FrameTimeoutMs);
+    r.audio.reportDiagnostics(); TEST_ASSERT_TRUE(r.log.contains("partial_timeouts=1"));
+    for (int i = 0; i < 500; ++i) r.uart.rx.push_back(0);
+    r.audio.update();
+    const auto count = r.log.messages.size();
+    r.audio.update(); r.audio.update(); TEST_ASSERT_EQUAL(count, r.log.messages.size());
+    r.tick(1000); TEST_ASSERT_TRUE(r.log.messages.size() > count);
+    TEST_ASSERT_TRUE(r.log.contains("malformed/incomplete RX data"));
+    r.uart.rx.clear(); r.tick(Config::FrameTimeoutMs);
+    r.uart.respond(0x42, 0x0201); r.audio.update();
+    TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
+}
+void errors_are_named_and_volume_mismatch_is_visible() {
+    const char* names[] = {"unknown module error", "busy/card unavailable", "sleeping", "serial frame error",
+                          "checksum mismatch", "file index out of range", "file not found/mismatch", "advertisement error"};
+    for (uint16_t code = 0; code < 8; ++code) {
+        Rig r; r.ready(); r.uart.respond(0x40, code); r.audio.update();
+        TEST_ASSERT_TRUE(r.log.contains(names[code]));
+    }
+    Rig r; r.query(); r.uart.respond(0x43, 30); r.audio.update();
+    TEST_ASSERT_TRUE(r.log.contains("got=30 expected=12 init_step=5/5"));
+    r.tick(Config::AudioResponseMs);
+    TEST_ASSERT_TRUE(r.log.contains("last_tx=0x43/0 last_rx=0x43/30"));
+    TEST_ASSERT_TRUE(r.log.contains("rx_bytes=10 rx_frames=1"));
+}
 int main() {
     UNITY_BEGIN(); RUN_TEST(protocol_known_frame_and_large_track); RUN_TEST(parser_rejects_corruption_and_resynchronizes);
     RUN_TEST(startup_pacing_verifies_volume_not_just_ack); RUN_TEST(all_commands_and_volume_validation);
@@ -146,5 +211,9 @@ int main() {
     RUN_TEST(device_error_sd_removal_finish_and_unrelated_frames); RUN_TEST(health_poll_response_and_disconnect);
     RUN_TEST(partial_frames_timeout_and_bounded_rx); RUN_TEST(startup_and_poll_rollover);
     RUN_TEST(missing_track_keeps_error_sound_playable_without_recursion);
+    RUN_TEST(logs_track_requests_responses_and_persistent_error_context);
+    RUN_TEST(rejection_and_transport_logs_identify_the_command);
+    RUN_TEST(malformed_rx_is_counted_and_warnings_are_rate_limited);
+    RUN_TEST(errors_are_named_and_volume_mismatch_is_visible);
     return UNITY_END();
 }

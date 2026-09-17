@@ -22,7 +22,8 @@ private:
     void help();
     void reportStatus();
     void updateSounds();
-    void signalError();
+    void signalError(const char* reason);
+    bool requestSound(uint16_t track, const char* reason);
     IHighFiveSensor& sensor() { return mode_ == AppMode::SequenceTest ? virtualSensor_ : sensor_; }
     IAudioPlayer& audio() { return mode_ == AppMode::SequenceTest ? virtualAudio_ : audio_; }
     ITrafficLight& lights() { return mode_ == AppMode::SequenceTest ? virtualLights_ : lights_; }
@@ -39,7 +40,8 @@ private:
     RobotController sequence_;
     AppMode mode_ = AppMode::Full;
     bool active_ = false, cycle_ = false, wasPressed_ = false;
-    bool bootPending_ = false, errorPending_ = false;
+    bool bootPending_ = false;
+    uint8_t pendingErrors_ = 0;
     uint32_t cycledAt_ = 0;
     uint8_t cycleStep_ = 0;
 };

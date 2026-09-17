@@ -3,6 +3,8 @@
 #include "core/TrafficLight.h"
 #include "core/YX5200AudioPlayer.h"
 #include "hardware/Esp32Adapters.h"
+#include <esp_system.h>
+#include <cstdio>
 
 namespace {
 struct Application {
@@ -25,6 +27,10 @@ Application& app() {
 
 void setup() {
     app().console.begin();
+    char message[144];
+    std::snprintf(message, sizeof(message), "[BOOT] reset_reason=%d free_heap=%lu build=%s %s",
+                  static_cast<int>(esp_reset_reason()), static_cast<unsigned long>(ESP.getFreeHeap()), __DATE__, __TIME__);
+    app().console.log(message);
     app().menu.begin();
 }
 
