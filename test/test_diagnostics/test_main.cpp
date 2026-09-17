@@ -190,8 +190,11 @@ void full_integration_with_real_core_and_fake_electrical_io() {
         TEST_ASSERT_EQUAL_INT(RobotState::Reward, diagnostics.robotState());
     }
     TEST_ASSERT_TRUE(outputs.frame[1].red); TEST_ASSERT_TRUE(outputs.frame[1].green);
-    TEST_ASSERT_TRUE(outputs.frame[2].green);
-    TEST_ASSERT_FALSE(outputs.frame[0].red); TEST_ASSERT_FALSE(outputs.frame[2].red);
+    TEST_ASSERT_FALSE(outputs.frame[1].blue);
+    for (std::size_t i : {0u, 2u}) {
+        TEST_ASSERT_FALSE(outputs.frame[i].red); TEST_ASSERT_FALSE(outputs.frame[i].green);
+        TEST_ASSERT_FALSE(outputs.frame[i].blue);
+    }
     clock.advance(1); diagnostics.update();
     TEST_ASSERT_EQUAL_INT(RobotState::Red, diagnostics.robotState());
     TEST_ASSERT_EQUAL(0x16, uart.tx.back()[3]);

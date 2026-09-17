@@ -907,9 +907,9 @@ NC / 2: unused; insulate this terminal.
     <div class="section" id="operation">
         <div class="section-title">8. Sequence and Prepared SD Card</div>
         <p><strong>Red: 3 seconds → yellow: 1 second → green: wait for high-five →
-        reward music + RGB animation → yellow and green together at 26 seconds → stop and red at 30 seconds.</strong></p>
-        <p>The reward timer starts at the high-five. For the final four seconds, the middle yellow
-        and bottom green pairs remain on together. At the deadline, firmware queues an audio stop
+        reward music + RGB animation → yellow at 26 seconds → stop and red at 30 seconds.</strong></p>
+        <p>The reward timer starts at the high-five. For the final four seconds, only the middle
+        yellow pair remains on. At the deadline, firmware queues an audio stop
         and shows red; audible timing includes UART/module latency. After red and yellow, green waits
         indefinitely for a new press. Manual AUDIO TEST playback and boot/error sounds do not have
         this reward timeout. Before the warning, animation rotates red, green and blue across the

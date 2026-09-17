@@ -75,11 +75,11 @@ void reward_once_then_red_at_boundary() {
         TEST_ASSERT_TRUE(r.lights.dancing);
         r.clock.advance(1); r.robot.update();
         TEST_ASSERT_EQUAL_INT(RobotState::Reward, r.robot.state());
-        TEST_ASSERT_EQUAL_INT(Lamp::YellowGreen, r.lights.lamp);
+        TEST_ASSERT_EQUAL_INT(Lamp::Yellow, r.lights.lamp);
         TEST_ASSERT_FALSE(r.lights.dancing);
         TEST_ASSERT_EQUAL(0, r.audio.stops);
         r.clock.advance(Config::RewardMs - Config::RewardWarningMs - 1); r.robot.update();
-        TEST_ASSERT_EQUAL_INT(Lamp::YellowGreen, r.lights.lamp);
+        TEST_ASSERT_EQUAL_INT(Lamp::Yellow, r.lights.lamp);
         r.clock.advance(1 + delta); r.robot.update();
         TEST_ASSERT_EQUAL_INT(RobotState::Red, r.robot.state());
         TEST_ASSERT_EQUAL(1, r.audio.stops);
@@ -114,7 +114,7 @@ void custom_settings_and_rollover() {
     TEST_ASSERT_EQUAL_INT(RobotState::Yellow, robot.state());
     r.clock.advance(6); robot.update(); robot.simulateHighFive(); robot.update();
     TEST_ASSERT_EQUAL(42, r.audio.track);
-    r.clock.advance(4); robot.update(); TEST_ASSERT_EQUAL_INT(Lamp::YellowGreen, r.lights.lamp);
+    r.clock.advance(4); robot.update(); TEST_ASSERT_EQUAL_INT(Lamp::Yellow, r.lights.lamp);
     r.clock.advance(2); robot.update(); TEST_ASSERT_EQUAL_INT(RobotState::Reward, robot.state());
     r.clock.advance(1); robot.update();
     TEST_ASSERT_EQUAL_INT(RobotState::Red, robot.state());

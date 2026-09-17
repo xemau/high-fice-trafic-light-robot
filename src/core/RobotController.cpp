@@ -86,7 +86,7 @@ void RobotController::update() {
                 enter(RobotState::Red);
             } else if (!rewardWarningShown_ && elapsed(now, startedAt_, settings_.rewardWarningMs)) {
                 rewardWarningShown_ = true;
-                lights_.show(Lamp::YellowGreen);
+                lights_.show(Lamp::Yellow);
             }
             break;
     }

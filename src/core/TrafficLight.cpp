@@ -15,8 +15,8 @@ void TrafficLight::show(Lamp lamp) {
     if (!active_) return;
     LedFrame frame{};
     if (lamp == Lamp::Red) frame[0] = {true, false, false};
-    if (lamp == Lamp::Yellow || lamp == Lamp::YellowGreen) frame[1] = {true, true, false};
-    if (lamp == Lamp::Green || lamp == Lamp::YellowGreen) frame[2] = {false, true, false};
+    if (lamp == Lamp::Yellow) frame[1] = {true, true, false};
+    if (lamp == Lamp::Green) frame[2] = {false, true, false};
     outputs_.write(frame);
 }
 
