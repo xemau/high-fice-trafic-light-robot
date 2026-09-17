@@ -58,6 +58,7 @@ bool YX5200AudioPlayer::begin() {
     awaitingStatus_ = false;
     errorEvent_ = false;
     lastTrack_ = 0;
+    uartStarted_ = false;
     parser_.reset();
     startedAt_ = lastSent_ = lastByte_ = clock_.now();
     status_ = AudioStatus::Starting;
@@ -65,6 +66,7 @@ bool YX5200AudioPlayer::begin() {
         fail("[ERROR] YX5200 UART initialization failed");
         return false;
     }
+    uartStarted_ = true;
     log_.log("[AUDIO] YX5200 initialization pending");
     return true;
 }
@@ -92,9 +94,12 @@ bool YX5200AudioPlayer::playTrack(uint16_t track) {
     return track >= 1 && track <= Config::MaxTrack && enqueue(0x12, track);
 }
 bool YX5200AudioPlayer::stop() {
-    // Stop supersedes pending playback so an expired reward cannot start later.
     count_ = 0;
-    return enqueue(0x16);
+    awaitingStatus_ = false;
+    if (!uartStarted_ || (status_ != AudioStatus::Ready && status_ != AudioStatus::Failed)) return false;
+    const bool retry = status_ == AudioStatus::Ready;
+    if (!send(0x16)) return false;
+    return !retry || enqueue(0x16);
 }
 bool YX5200AudioPlayer::pause() { return enqueue(0x0e); }
 bool YX5200AudioPlayer::resume() { return enqueue(0x0d); }

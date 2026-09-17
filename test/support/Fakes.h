@@ -36,11 +36,12 @@ struct FakeAudio : IAudioPlayer {
     bool ok = true, error = false;
     int begins = 0, updates = 0, plays = 0, stops = 0, pauses = 0, resumes = 0, nexts = 0, previouses = 0;
     uint16_t track = 0;
+    std::vector<uint16_t> tracks;
     int volume = -1;
     AudioStatus state = AudioStatus::Off;
     bool begin() override { ++begins; state = ok ? AudioStatus::Ready : AudioStatus::Failed; return ok; }
     void update() override { ++updates; }
-    bool playTrack(uint16_t value) override { ++plays; track = value; return ok; }
+    bool playTrack(uint16_t value) override { ++plays; track = value; tracks.push_back(value); return ok; }
     bool stop() override { ++stops; return ok; }
     bool pause() override { ++pauses; return ok; }
     bool resume() override { ++resumes; return ok; }

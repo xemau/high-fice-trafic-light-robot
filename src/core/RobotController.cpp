@@ -2,6 +2,24 @@
 #include "core/Timing.h"
 #include <cstdio>
 
+uint16_t RobotController::selectRewardTrack() {
+    if (settings_.rewardTrackCount <= 1) return settings_.rewardTrack;
+    randomState_ ^= clock_.now() + 0x9e3779b9 + (randomState_ << 6) + (randomState_ >> 2);
+    randomState_ ^= randomState_ << 13;
+    randomState_ ^= randomState_ >> 17;
+    randomState_ ^= randomState_ << 5;
+    uint16_t offset = static_cast<uint16_t>(randomState_ % settings_.rewardTrackCount);
+    uint16_t track = static_cast<uint16_t>(settings_.rewardTrack + offset);
+    if (track == lastRewardTrack_) {
+        offset = static_cast<uint16_t>((offset + 1 +
+            (randomState_ / settings_.rewardTrackCount) % (settings_.rewardTrackCount - 1)) %
+            settings_.rewardTrackCount);
+        track = static_cast<uint16_t>(settings_.rewardTrack + offset);
+    }
+    lastRewardTrack_ = track;
+    return track;
+}
+
 const char* RobotController::stateName(RobotState state) {
     switch (state) {
         case RobotState::Red: return "RED";
@@ -28,9 +46,11 @@ void RobotController::enter(RobotState state) {
         case RobotState::Yellow: lights_.show(Lamp::Yellow); break;
         case RobotState::GreenWaiting: lights_.show(Lamp::Green); break;
         case RobotState::Reward: {
-            const bool ok = audio_.playTrack(settings_.rewardTrack);
+            rewardWarningShown_ = false;
+            const uint16_t track = selectRewardTrack();
+            const bool ok = audio_.playTrack(track);
             char message[64];
-            std::snprintf(message, sizeof(message), "[AUDIO] PLAY %u %s", settings_.rewardTrack,
+            std::snprintf(message, sizeof(message), "[AUDIO] PLAY %u %s", track,
                           ok ? "queued" : "unavailable");
             log_.log(message);
             lights_.startAnimation();
@@ -64,6 +84,9 @@ void RobotController::update() {
             if (elapsed(now, startedAt_, settings_.rewardMs)) {
                 if (!audio_.stop()) log_.log("[ERROR] audio stop unavailable");
                 enter(RobotState::Red);
+            } else if (!rewardWarningShown_ && elapsed(now, startedAt_, settings_.rewardWarningMs)) {
+                rewardWarningShown_ = true;
+                lights_.show(Lamp::YellowGreen);
             }
             break;
     }

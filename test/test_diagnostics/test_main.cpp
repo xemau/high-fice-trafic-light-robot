@@ -180,15 +180,21 @@ void full_integration_with_real_core_and_fake_electrical_io() {
     TEST_ASSERT_EQUAL_INT(RobotState::Reward, diagnostics.robotState());
     const auto rewardStartedAt = clock.now();
     clock.advance(Config::AudioCommandMs); diagnostics.update();
-    TEST_ASSERT_EQUAL(0x12, uart.tx.back()[3]); TEST_ASSERT_EQUAL(Config::RewardTrack, uart.tx.back()[6]);
+    TEST_ASSERT_EQUAL(0x12, uart.tx.back()[3]);
+    TEST_ASSERT_GREATER_OR_EQUAL(Config::RewardTrack, uart.tx.back()[6]);
+    TEST_ASSERT_LESS_THAN(Config::RewardTrack + Config::RewardTrackCount, uart.tx.back()[6]);
     while (clock.now() - rewardStartedAt < Config::RewardMs - 1) {
         const auto remaining = Config::RewardMs - 1 - (clock.now() - rewardStartedAt);
         clock.advance(remaining < 100 ? remaining : 100);
         uart.respond(0x42, 0x0201); diagnostics.update();
         TEST_ASSERT_EQUAL_INT(RobotState::Reward, diagnostics.robotState());
     }
+    TEST_ASSERT_TRUE(outputs.frame[1].red); TEST_ASSERT_TRUE(outputs.frame[1].green);
+    TEST_ASSERT_TRUE(outputs.frame[2].green);
+    TEST_ASSERT_FALSE(outputs.frame[0].red); TEST_ASSERT_FALSE(outputs.frame[2].red);
     clock.advance(1); diagnostics.update();
     TEST_ASSERT_EQUAL_INT(RobotState::Red, diagnostics.robotState());
+    TEST_ASSERT_EQUAL(0x16, uart.tx.back()[3]);
     clock.advance(Config::AudioCommandMs); diagnostics.update();
     TEST_ASSERT_EQUAL(0x16, uart.tx.back()[3]);
     TEST_ASSERT_TRUE(outputs.frame[0].red);

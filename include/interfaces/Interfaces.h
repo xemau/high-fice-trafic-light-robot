@@ -38,7 +38,7 @@ struct IAudioPlayer {
     virtual AudioStatus status() const = 0;
     virtual bool takeError() { return false; }
 };
-enum class Lamp { Red, Yellow, Green, Off };
+enum class Lamp { Red, Yellow, Green, Off, YellowGreen };
 struct ITrafficLight {
     virtual ~ITrafficLight() = default;
     virtual bool begin() = 0;

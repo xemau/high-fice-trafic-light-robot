@@ -907,11 +907,13 @@ NC / 2: unused; insulate this terminal.
     <div class="section" id="operation">
         <div class="section-title">8. Sequence and Prepared SD Card</div>
         <p><strong>Red: 3 seconds → yellow: 1 second → green: wait for high-five →
-        reward music + RGB animation: 30 seconds → red.</strong></p>
-        <p>The reward timer starts at the high-five. At the deadline, firmware stops the animation
-        and queues an audio stop; audible timing includes UART/module latency. Manual AUDIO TEST
-        playback and boot/error sounds do not have this reward timeout. Animation rotates red,
-        green and blue across the three pairs every 80ms; both LEDs in each pair match.</p>
+        reward music + RGB animation → yellow and green together at 26 seconds → stop and red at 30 seconds.</strong></p>
+        <p>The reward timer starts at the high-five. For the final four seconds, the middle yellow
+        and bottom green pairs remain on together. At the deadline, firmware queues an audio stop
+        and shows red; audible timing includes UART/module latency. After red and yellow, green waits
+        indefinitely for a new press. Manual AUDIO TEST playback and boot/error sounds do not have
+        this reward timeout. Before the warning, animation rotates red, green and blue across the
+        three pairs every 80ms; both LEDs in each pair match.</p>
         <table class="pin-table">
             <caption>FAT32 / MBR card, volume ROBOT — inserted into the YX5200 while unpowered</caption>
             <thead><tr><th scope="col">Sound</th><th scope="col">Playback file</th><th scope="col">Source / archive</th></tr></thead>

@@ -58,19 +58,28 @@ void early_events_are_consumed_not_deferred() {
 }
 void reward_once_then_red_at_boundary() {
     TEST_ASSERT_EQUAL_UINT32(30000, Config::RewardMs);
+    TEST_ASSERT_EQUAL_UINT32(26000, Config::RewardWarningMs);
     for (uint32_t start : {0u, UINT32_MAX - 15000}) for (uint32_t delta : {0u, 1u}) {
         Rig r; r.clock.time = start; r.reward();
         TEST_ASSERT_EQUAL_INT(RobotState::Reward, r.robot.state());
-        TEST_ASSERT_EQUAL(Config::RewardTrack, r.audio.track);
+        TEST_ASSERT_GREATER_OR_EQUAL(Config::RewardTrack, r.audio.track);
+        TEST_ASSERT_LESS_THAN(Config::RewardTrack + Config::RewardTrackCount, r.audio.track);
         TEST_ASSERT_TRUE(r.lights.dancing);
         r.sensor.down = true;
         r.robot.update(); r.robot.simulateHighFive(); r.robot.update();
         TEST_ASSERT_EQUAL(1, r.audio.plays);
         TEST_ASSERT_EQUAL(1, r.lights.animations);
-        r.clock.advance(Config::RewardMs - 1); r.robot.update();
+        r.clock.advance(Config::RewardWarningMs - 1); r.robot.update();
         TEST_ASSERT_EQUAL_INT(RobotState::Reward, r.robot.state());
         TEST_ASSERT_EQUAL(0, r.audio.stops);
         TEST_ASSERT_TRUE(r.lights.dancing);
+        r.clock.advance(1); r.robot.update();
+        TEST_ASSERT_EQUAL_INT(RobotState::Reward, r.robot.state());
+        TEST_ASSERT_EQUAL_INT(Lamp::YellowGreen, r.lights.lamp);
+        TEST_ASSERT_FALSE(r.lights.dancing);
+        TEST_ASSERT_EQUAL(0, r.audio.stops);
+        r.clock.advance(Config::RewardMs - Config::RewardWarningMs - 1); r.robot.update();
+        TEST_ASSERT_EQUAL_INT(Lamp::YellowGreen, r.lights.lamp);
         r.clock.advance(1 + delta); r.robot.update();
         TEST_ASSERT_EQUAL_INT(RobotState::Red, r.robot.state());
         TEST_ASSERT_EQUAL(1, r.audio.stops);
@@ -98,16 +107,36 @@ void reset_cancels_reward_and_pending_event() {
 void custom_settings_and_rollover() {
     Rig r;
     r.clock.time = UINT32_MAX - 3;
-    RobotController robot(r.clock, r.sensor, r.audio, r.lights, r.log, {5, 6, 7, 42});
+    RobotController robot(r.clock, r.sensor, r.audio, r.lights, r.log, {5, 6, 7, 42, 1, 4});
     robot.begin(); r.clock.advance(4); robot.update();
     TEST_ASSERT_EQUAL_INT(RobotState::Red, robot.state());
     r.clock.advance(1); robot.update();
     TEST_ASSERT_EQUAL_INT(RobotState::Yellow, robot.state());
     r.clock.advance(6); robot.update(); robot.simulateHighFive(); robot.update();
     TEST_ASSERT_EQUAL(42, r.audio.track);
-    r.clock.advance(7); robot.update();
+    r.clock.advance(4); robot.update(); TEST_ASSERT_EQUAL_INT(Lamp::YellowGreen, r.lights.lamp);
+    r.clock.advance(2); robot.update(); TEST_ASSERT_EQUAL_INT(RobotState::Reward, robot.state());
+    r.clock.advance(1); robot.update();
     TEST_ASSERT_EQUAL_INT(RobotState::Red, robot.state());
     TEST_ASSERT_EQUAL_STRING("UNKNOWN", RobotController::stateName(static_cast<RobotState>(99)));
+}
+void reward_tracks_are_randomized_without_immediate_repeats() {
+    Rig r;
+    for (int i = 0; i < 18; ++i) {
+        r.green();
+        r.clock.advance(static_cast<uint32_t>(i * 17 + 3));
+        r.sensor.event = true; r.robot.update();
+        r.clock.advance(Config::RewardMs); r.robot.update();
+    }
+    unsigned seen = 0;
+    for (std::size_t i = 0; i < r.audio.tracks.size(); ++i) {
+        const auto track = r.audio.tracks[i];
+        TEST_ASSERT_GREATER_OR_EQUAL(Config::RewardTrack, track);
+        TEST_ASSERT_LESS_THAN(Config::RewardTrack + Config::RewardTrackCount, track);
+        seen |= 1u << (track - Config::RewardTrack);
+        if (i) TEST_ASSERT_NOT_EQUAL(r.audio.tracks[i - 1], track);
+    }
+    TEST_ASSERT_EQUAL((1u << Config::RewardTrackCount) - 1, seen);
 }
 void physical_held_switch_requires_release_and_new_press() {
     FakeClock clock; FakeInput input; FakeAudio audio; FakeLights lights; FakeLog log;
@@ -135,5 +164,6 @@ int main() {
     RUN_TEST(reset_cancels_reward_and_pending_event);
     RUN_TEST(custom_settings_and_rollover);
     RUN_TEST(physical_held_switch_requires_release_and_new_press);
+    RUN_TEST(reward_tracks_are_randomized_without_immediate_repeats);
     return UNITY_END();
 }

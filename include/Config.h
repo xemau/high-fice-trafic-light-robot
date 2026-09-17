@@ -24,13 +24,15 @@ constexpr uint8_t Mp3Uart = 2;
 constexpr uint32_t RedMs = 3000;
 constexpr uint32_t YellowMs = 1000;
 constexpr uint32_t RewardMs = 30000;
+constexpr uint32_t RewardWarningMs = 26000;
 constexpr uint32_t DebounceMs = 30;
 constexpr uint32_t AnimationMs = 80;
 constexpr uint32_t LightCycleMs = 1000;
 constexpr uint32_t SelectionMs = 5000;
-constexpr int DefaultVolume = 12;
-constexpr uint8_t DefaultEqualizer = 1; // YX5200: Normal=0, Pop=1, Rock=2, Jazz=3, Classic=4, Bass=5.
+constexpr int DefaultVolume = 30;
+constexpr uint8_t DefaultEqualizer = 3; // YX5200: Normal=0, Pop=1, Rock=2, Jazz=3, Classic=4, Bass=5.
 constexpr uint16_t RewardTrack = 1;
+constexpr uint16_t RewardTrackCount = 3;
 constexpr uint16_t BootTrack = 2998;
 constexpr uint16_t ErrorTrack = 2999;
 constexpr int MaxVolume = 30;
@@ -48,7 +50,9 @@ constexpr auto DefaultMode = static_cast<AppMode>(DEFAULT_APP_MODE);
 static_assert(DEFAULT_APP_MODE >= 1 && DEFAULT_APP_MODE <= 5, "DEFAULT_APP_MODE must be 1..5");
 static_assert(DefaultVolume >= 0 && DefaultVolume <= MaxVolume);
 static_assert(DefaultEqualizer <= 5);
+static_assert(RewardWarningMs < RewardMs);
 static_assert(RewardTrack >= 1 && RewardTrack <= MaxTrack);
+static_assert(RewardTrackCount >= 1 && RewardTrack + RewardTrackCount <= BootTrack);
 static_assert(BootTrack > RewardTrack && ErrorTrack > RewardTrack && BootTrack != ErrorTrack);
 static_assert(BootTrack <= MaxTrack && ErrorTrack <= MaxTrack);
 static_assert(AnimationMs > 0 && LightCycleMs > 0);

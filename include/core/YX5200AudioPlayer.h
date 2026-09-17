@@ -45,5 +45,5 @@ private:
     uint32_t startedAt_ = 0, lastSent_ = 0, lastByte_ = 0, queriedAt_ = 0;
     uint8_t initStep_ = 0;
     uint16_t lastTrack_ = 0;
-    bool awaitingStatus_ = false, errorEvent_ = false;
+    bool awaitingStatus_ = false, errorEvent_ = false, uartStarted_ = false;
 };

@@ -48,7 +48,8 @@ void startup_pacing_verifies_volume_not_just_ack() {
     r.tick(Config::AudioCommandMs - 1); TEST_ASSERT_EQUAL(1, r.uart.tx.size());
     r.tick(1); r.last(0x09, 2); r.tick(); r.last(0x06, Config::DefaultVolume);
     r.tick(); r.last(0x1a); r.tick(); r.last(0x07, Config::DefaultEqualizer); r.tick(); r.last(0x43);
-    r.uart.respond(0x41, 0); r.uart.respond(0x3f, 2); r.uart.respond(0x43, 30); r.audio.update();
+    r.uart.respond(0x41, 0); r.uart.respond(0x3f, 2);
+    r.uart.respond(0x43, (Config::DefaultVolume + 1) % (Config::MaxVolume + 1)); r.audio.update();
     TEST_ASSERT_EQUAL_INT(AudioStatus::Starting, r.audio.status());
     r.uart.respond(0x43, Config::DefaultVolume); r.audio.update();
     TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status()); TEST_ASSERT_TRUE(r.log.contains("[OK] YX5200"));
@@ -65,15 +66,15 @@ void all_commands_and_volume_validation() {
     TEST_ASSERT_TRUE(r.audio.setVolume(0)); r.tick(); r.last(0x06, 0);
     TEST_ASSERT_TRUE(r.audio.setVolume(30)); r.tick(); r.last(0x06, 30);
     TEST_ASSERT_FALSE(r.audio.setVolume(-1)); TEST_ASSERT_FALSE(r.audio.setVolume(31)); TEST_ASSERT_FALSE(r.audio.setVolume(1000));
-    TEST_ASSERT_TRUE(r.audio.stop()); r.tick(); r.last(0x16);
+    TEST_ASSERT_TRUE(r.audio.stop()); r.last(0x16); r.tick(); r.last(0x16);
 }
 void queue_overflow_and_stop_priority() {
     Rig r; r.ready();
     for (std::size_t i = 0; i < Config::AudioQueueSize; ++i) TEST_ASSERT_TRUE(r.audio.playTrack(i + 1));
     TEST_ASSERT_FALSE(r.audio.pause());
     const auto count = r.uart.tx.size(); r.audio.update(); TEST_ASSERT_EQUAL(count, r.uart.tx.size());
-    TEST_ASSERT_TRUE(r.audio.stop()); r.tick(); r.last(0x16);
-    r.tick(); TEST_ASSERT_EQUAL(count + 1, r.uart.tx.size());
+    TEST_ASSERT_TRUE(r.audio.stop()); r.last(0x16); r.tick(); r.last(0x16);
+    r.tick(); TEST_ASSERT_EQUAL(count + 2, r.uart.tx.size());
     for (int i = 0; i < 12; ++i) { TEST_ASSERT_TRUE(r.audio.playTrack(i + 1)); r.tick(); r.last(0x12, i + 1); }
 }
 void missing_module_timeout_retry_and_transport_failure() {
@@ -118,6 +119,7 @@ void health_poll_response_and_disconnect() {
     r.tick(Config::AudioResponseMs - 1); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
     r.tick(1); TEST_ASSERT_EQUAL_INT(AudioStatus::Failed, r.audio.status());
     TEST_ASSERT_TRUE(r.log.contains("disconnected"));
+    TEST_ASSERT_TRUE(r.audio.stop()); r.last(0x16);
 }
 void partial_frames_timeout_and_bounded_rx() {
     Rig r; r.query(); const auto bytes = encodeMp3Frame(0x43, Config::DefaultVolume);

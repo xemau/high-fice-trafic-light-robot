@@ -4,9 +4,11 @@
 void setUp() {}
 void tearDown() {}
 void assertLamp(Lamp expected, const FakeLedOutputs& outputs) {
+    const bool yellow = expected == Lamp::Yellow || expected == Lamp::YellowGreen;
+    const bool green = expected == Lamp::Green || expected == Lamp::YellowGreen;
     for (std::size_t i = 0; i < outputs.frame.size(); ++i) {
-        TEST_ASSERT_EQUAL((i == 0 && expected == Lamp::Red) || (i == 1 && expected == Lamp::Yellow), outputs.frame[i].red);
-        TEST_ASSERT_EQUAL((i == 1 && expected == Lamp::Yellow) || (i == 2 && expected == Lamp::Green), outputs.frame[i].green);
+        TEST_ASSERT_EQUAL((i == 0 && expected == Lamp::Red) || (i == 1 && yellow), outputs.frame[i].red);
+        TEST_ASSERT_EQUAL((i == 1 && yellow) || (i == 2 && green), outputs.frame[i].green);
         TEST_ASSERT_FALSE(outputs.frame[i].blue);
     }
 }
@@ -21,7 +23,7 @@ void rgb_pairs_yellow_mixing_and_off() {
     FakeClock clock; FakeLedOutputs outputs; TrafficLight lights(clock, outputs);
     TEST_ASSERT_TRUE(lights.begin());
     assertLamp(Lamp::Off, outputs);
-    for (auto lamp : {Lamp::Red, Lamp::Yellow, Lamp::Green, Lamp::Off}) {
+    for (auto lamp : {Lamp::Red, Lamp::Yellow, Lamp::Green, Lamp::YellowGreen, Lamp::Off}) {
         lights.show(lamp); assertLamp(lamp, outputs);
     }
     lights.show(static_cast<Lamp>(99)); assertLamp(Lamp::Off, outputs);
@@ -34,7 +36,7 @@ void animation_boundary_progression_and_stop() {
     clock.advance(1); lights.updateAnimation(); assertAnimation(1, outputs);
     clock.advance(Config::AnimationMs + 1); lights.updateAnimation(); assertAnimation(2, outputs);
     clock.advance(Config::AnimationMs); lights.updateAnimation(); assertAnimation(0, outputs);
-    for (auto lamp : {Lamp::Red, Lamp::Yellow, Lamp::Green, Lamp::Off}) {
+    for (auto lamp : {Lamp::Red, Lamp::Yellow, Lamp::Green, Lamp::YellowGreen, Lamp::Off}) {
         lights.startAnimation(); lights.show(lamp); const int written = outputs.writes;
         clock.advance(1000); lights.updateAnimation();
         TEST_ASSERT_EQUAL(written, outputs.writes); assertLamp(lamp, outputs);

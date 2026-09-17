@@ -20,6 +20,7 @@ Status: **not yet performed on physical hardware**. Native tests and a successfu
 - [ ] SENSOR TEST: DB1 released HIGH / pressed LOW; repeated press/release, bounce, hold, second press, mounted hand; verify low-current contact reliability.
 - [ ] LIGHTS TEST: top red, middle red+green yellow, bottom green; only the selected pair lights.
 - [ ] Both LEDs of every pair match; dance cycles each pair through red, green and blue.
+- [ ] FULL mode: at 26 seconds of reward, the middle yellow and bottom green pairs remain on together; at 30 seconds audio stops and red turns on.
 - [ ] All channels off during reset and on `off`; verify resistor currents, mixed-yellow hue and blue/green brightness at 3.3 V.
 - [ ] AUDIO TEST: verified UART initialization, play/pause/resume/stop, volume, next/previous.
 - [ ] Resistor-summed DAC audio through one amplifier channel produces clean sound.
