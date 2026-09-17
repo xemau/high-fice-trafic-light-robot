@@ -204,6 +204,24 @@ void errors_are_named_and_volume_mismatch_is_visible() {
     TEST_ASSERT_TRUE(r.log.contains("last_tx=0x43/0 last_rx=0x43/30"));
     TEST_ASSERT_TRUE(r.log.contains("rx_bytes=10 rx_frames=1"));
 }
+void volume_and_play_are_ordered_and_rejected_atomically() {
+    Rig r;
+    TEST_ASSERT_FALSE(r.audio.playTrackAtVolume(1, Config::MusicVolume));
+    r.ready();
+    TEST_ASSERT_FALSE(r.audio.playTrackAtVolume(0, 30));
+    TEST_ASSERT_FALSE(r.audio.playTrackAtVolume(1, 31));
+    const auto before = r.uart.tx.size();
+    r.tick(); TEST_ASSERT_EQUAL(before, r.uart.tx.size());
+    TEST_ASSERT_TRUE(r.audio.playTrackAtVolume(1, Config::MusicVolume));
+    r.tick(); r.last(0x06, 30); r.tick(); r.last(0x12, 1);
+    TEST_ASSERT_TRUE(r.audio.playTrackAtVolume(Config::ErrorTrack, Config::DefaultVolume));
+    r.tick(); r.last(0x06, 12); r.tick(); r.last(0x12, Config::ErrorTrack);
+    for (unsigned i = 0; i < Config::AudioQueueSize - 1; ++i) TEST_ASSERT_TRUE(r.audio.pause());
+    TEST_ASSERT_FALSE(r.audio.playTrackAtVolume(1, 30));
+    TEST_ASSERT_TRUE(r.log.contains("require two free queue slots"));
+    TEST_ASSERT_TRUE(r.audio.resume());
+    TEST_ASSERT_FALSE(r.audio.resume());
+}
 int main() {
     UNITY_BEGIN(); RUN_TEST(protocol_known_frame_and_large_track); RUN_TEST(parser_rejects_corruption_and_resynchronizes);
     RUN_TEST(startup_pacing_verifies_volume_not_just_ack); RUN_TEST(all_commands_and_volume_validation);
@@ -215,5 +233,6 @@ int main() {
     RUN_TEST(rejection_and_transport_logs_identify_the_command);
     RUN_TEST(malformed_rx_is_counted_and_warnings_are_rate_limited);
     RUN_TEST(errors_are_named_and_volume_mismatch_is_visible);
+    RUN_TEST(volume_and_play_are_ordered_and_rejected_atomically);
     return UNITY_END();
 }

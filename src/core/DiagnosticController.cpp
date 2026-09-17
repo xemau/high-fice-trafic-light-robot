@@ -89,14 +89,14 @@ bool DiagnosticController::requestSound(uint16_t track, const char* reason) {
     if (enabled) {
         if (audio().status() != AudioStatus::Ready) result = "suppressed: audio not ready";
         else {
-            ok = audio().playTrack(track);
+            ok = audio().playTrackAtVolume(track, Config::DefaultVolume);
             result = ok ? "queued (not proof of sound)" : "rejected by audio player";
         }
     }
     char message[512];
-    std::snprintf(message, sizeof(message), "[SOUND] role=%s track=%u reason=%s result=%s mode=%u state=%s audio=%s",
+    std::snprintf(message, sizeof(message), "[SOUND] role=%s track=%u reason=%s result=%s volume=%d mode=%u state=%s audio=%s",
                   track == Config::ErrorTrack ? "error" : "boot", static_cast<unsigned>(track), reason, result,
-                  static_cast<unsigned>(mode_), robotMode() ? RobotController::stateName(robotState()) : "unused",
+                  Config::DefaultVolume, static_cast<unsigned>(mode_), robotMode() ? RobotController::stateName(robotState()) : "unused",
                   enabled ? audioStatusName(audio().status()) : "unused");
     log_.log(message);
     return ok;
@@ -190,7 +190,10 @@ void DiagnosticController::command(Command cmd) {
     if (audioMode()) {
         bool ok = false, handled = true;
         switch (cmd.type) {
-            case CommandType::Play: ok = audio().playTrack(static_cast<uint16_t>(cmd.value)); break;
+            case CommandType::Play:
+                ok = audio().playTrackAtVolume(static_cast<uint16_t>(cmd.value),
+                    cmd.value == Config::BootTrack || cmd.value == Config::ErrorTrack ? Config::DefaultVolume : Config::MusicVolume);
+                break;
             case CommandType::Stop: ok = audio().stop(); break;
             case CommandType::Pause: ok = audio().pause(); break;
             case CommandType::Resume: ok = audio().resume(); break;

@@ -28,11 +28,11 @@ void RobotController::enter(RobotState state) {
         case RobotState::Yellow: lights_.show(Lamp::Yellow); break;
         case RobotState::GreenWaiting: lights_.show(Lamp::Green); break;
         case RobotState::Reward: {
-            const bool ok = audio_.playTrack(settings_.rewardTrack);
+            const bool ok = audio_.playTrackAtVolume(settings_.rewardTrack, Config::MusicVolume);
             char message[160];
-            std::snprintf(message, sizeof(message), "[AUDIO] PLAY %u %s reason=high-five reward audio=%s limit_ms=%lu",
+            std::snprintf(message, sizeof(message), "[AUDIO] PLAY %u %s reason=high-five reward volume=%d audio=%s limit_ms=%lu",
                           static_cast<unsigned>(settings_.rewardTrack), ok ? "queued" : "unavailable",
-                          audioStatusName(audio_.status()), static_cast<unsigned long>(settings_.rewardMs));
+                          Config::MusicVolume, audioStatusName(audio_.status()), static_cast<unsigned long>(settings_.rewardMs));
             log_.log(message);
             lights_.startAnimation();
             break;

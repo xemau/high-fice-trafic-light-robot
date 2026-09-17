@@ -8,7 +8,7 @@ The ESP32 controls a **YX5200 Mini MP3 module** over UART2; the YX5200 decodes t
 
 ## Status and verification
 
-The ESP32 firmware builds, and 53 native tests pass across six suites, plus 12 host tests for SD preparation, audio conversion, GPIO output and buffered serial logging. A clean Apple Clang coverage run measured **100% core line coverage and 98.2% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
+The ESP32 firmware builds, and 55 native tests pass across six suites, plus 12 host tests for SD preparation, audio conversion, GPIO output and buffered serial logging. A clean Apple Clang coverage run measured **100% core line coverage and 97.6% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
 
 Physical commissioning is still required. USB diagnostics have verified YX5200 initialization and status replies, but the reported audible output did not match the requested boot/reward tracks. The SD playback files match their preparation hashes and decode on the laptop; this does not prove the module selects or decodes them correctly. Tests verify application behavior and protocol handling, not actual sound, wiring, switch mechanics or supply stability. Follow the staged bring-up checklist before installing the electronics in cardboard.
 
@@ -145,7 +145,7 @@ PAM8610 L+ ------------------- speaker +
 PAM8610 L- ------------------- speaker -   (NOT ground)
 ```
 
-Do not connect YX5200 SPK+/SPK− into the PAM8610. Do not ground L−/speaker−, join amplifier outputs, or use an earth-grounded oscilloscope clip on a speaker output. The PAM8610 has bridge outputs. Its manufacturer's datasheet includes 4 Ω load characteristics; the board's advertised “15 W” is not a guaranteed clean-output rating. Start with the amplifier gain low and firmware volume 12, then check distortion and temperature under load. Keep the specified 12 V architecture.
+Do not connect YX5200 SPK+/SPK− into the PAM8610. Do not ground L−/speaker−, join amplifier outputs, or use an earth-grounded oscilloscope clip on a speaker output. The PAM8610 has bridge outputs. Its manufacturer's datasheet includes 4 Ω load characteristics; the board's advertised “15 W” is not a guaranteed clean-output rating. Start with the amplifier gain low: music starts at firmware volume 30/30, while startup and system sounds use 12/30. Check distortion and temperature under load. Keep the specified 12 V architecture.
 
 Avoid powering the ESP32 from USB and external 5 V simultaneously until the exact carrier's USB/5V power path has been verified. For basic programming, turn off 12 V and use USB to power only the ESP32; disconnect the external 5 V feed to the board if its backfeed behavior is unknown. Keep unpowered peripheral signal connections disconnected to avoid phantom powering. For serial diagnostics with the external supply on, use a verified power arrangement or a suitable USB data connection that isolates host VBUS while retaining the signals/ground required by the carrier. Do not assume all “data-only” cables provide this arrangement.
 
@@ -182,6 +182,8 @@ Reboot to select a different mode. A digit sent after selection is rejected; mod
 | `5` | SEQUENCE TEST | None of the physical sensor/LED/audio devices | Runs the real RobotController with virtual hardware. Send `highfive` at green; inspect state and simulated audio logs |
 
 FULL and SEQUENCE also accept `status`, `play <track>`, `volume <0-30>`, `lights red`, `lights yellow`, `lights green`, `lights off`, `simulate highfive`, `reset`, and `help`, plus the audio controls above. Manual lamp commands persist until the next state transition; they do not change the state machine. `reset` stops pending reward playback and returns to red. In sequence mode, audio acceptance and lamp operations are simulated.
+
+High-five music and manual `play N` music requests set `Config::MusicVolume` to **30/30 (maximum)** before playback. Boot/error requests, including `play 2998` and `play 2999`, set `Config::DefaultVolume` to **12/30** first. Volume and track commands require two free queue slots and are accepted together or rejected together. The module has one shared volume control: the new setting can affect the outgoing sound briefly before the next track starts. `volume N` still adjusts current playback; the next explicit track request reapplies its configured level. `next`/`previous`/`resume` retain the current module volume. The reward limit remains 30 seconds.
 
 Boot-held switches are displayed as pressed but generate no high-five until released and pressed again. A press during red/yellow/reward is consumed and ignored by the state machine. A switch held into green cannot trigger a later reward automatically. Mount the switch inside the hand/arm so a high-five moves the hand enough to actuate it, without transferring the full impact into the switch or exposed wires.
 
@@ -280,7 +282,8 @@ All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB
 | Green | Wait indefinitely |
 | Debounce | 30 ms |
 | Reward / boot / error track | 1 / 2998 / 2999 |
-| Initial volume | 12 (supported volume range 0–30) |
+| Initial / boot / error volume | 12/30 |
+| Music volume | 30/30 (maximum; keep amplifier gain low) |
 | Boot selection timeout / default | 5000 ms / FULL |
 
 To remap the LEDs, edit `Config::Pins::LedRgb`: rows are top/middle/bottom pairs and columns are R/G/B. Compile-time checks reject duplicate pins, sensor/UART conflicts and pins outside the safe output list. RobotController needs no changes. Channels are on/off, not PWM; brightness and mixed-yellow balance depend on the LED/resistor combination. Initialization sets all nine outputs HIGH (off), and each frame blanks all channels before pulling the selected cathodes LOW. Recommended external pull-ups keep them off before initialization.

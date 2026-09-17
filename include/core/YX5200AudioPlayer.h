@@ -25,6 +25,7 @@ public:
     bool begin() override;
     void update() override;
     bool playTrack(uint16_t track) override;
+    bool playTrackAtVolume(uint16_t track, int volume) override;
     bool stop() override;
     bool pause() override;
     bool resume() override;

@@ -42,6 +42,9 @@ struct IAudioPlayer {
     virtual bool pause() = 0;
     virtual bool resume() = 0;
     virtual bool setVolume(int volume) = 0;
+    virtual bool playTrackAtVolume(uint16_t track, int volume) {
+        return setVolume(volume) && playTrack(track);
+    }
     virtual bool next() = 0;
     virtual bool previous() = 0;
     virtual AudioStatus status() const = 0;

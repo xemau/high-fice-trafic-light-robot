@@ -175,10 +175,13 @@ void full_integration_with_real_core_and_fake_electrical_io() {
     for (int i = 0; i < 4; ++i) { clock.advance(Config::AudioCommandMs); diagnostics.update(); }
     uart.respond(0x43, Config::DefaultVolume); diagnostics.update();
     clock.advance(Config::AudioCommandMs); diagnostics.update();
+    clock.advance(Config::AudioCommandMs); diagnostics.update();
     TEST_ASSERT_EQUAL_INT(RobotState::GreenWaiting, diagnostics.robotState());
     input.level = false; diagnostics.update(); clock.advance(Config::DebounceMs); diagnostics.update();
     TEST_ASSERT_EQUAL_INT(RobotState::Reward, diagnostics.robotState());
     const auto rewardStartedAt = clock.now();
+    clock.advance(Config::AudioCommandMs); diagnostics.update();
+    TEST_ASSERT_EQUAL(0x06, uart.tx.back()[3]); TEST_ASSERT_EQUAL(Config::MusicVolume, uart.tx.back()[6]);
     clock.advance(Config::AudioCommandMs); diagnostics.update();
     TEST_ASSERT_EQUAL(0x12, uart.tx.back()[3]); TEST_ASSERT_EQUAL(Config::RewardTrack, uart.tx.back()[6]);
     while (clock.now() - rewardStartedAt < Config::RewardMs - 1) {
@@ -187,10 +190,13 @@ void full_integration_with_real_core_and_fake_electrical_io() {
         uart.respond(0x42, 0x0201); diagnostics.update();
         TEST_ASSERT_EQUAL_INT(RobotState::Reward, diagnostics.robotState());
     }
+    const auto beforeStop = uart.tx.size();
     clock.advance(1); diagnostics.update();
     TEST_ASSERT_EQUAL_INT(RobotState::Red, diagnostics.robotState());
     clock.advance(Config::AudioCommandMs); diagnostics.update();
-    TEST_ASSERT_EQUAL(0x16, uart.tx.back()[3]);
+    bool stopped = false;
+    for (auto i = beforeStop; i < uart.tx.size(); ++i) stopped = stopped || uart.tx[i][3] == 0x16;
+    TEST_ASSERT_TRUE(stopped);
     TEST_ASSERT_TRUE(outputs.frame[0].red);
     TEST_ASSERT_FALSE(outputs.frame[0].green); TEST_ASSERT_FALSE(outputs.frame[0].blue);
     for (std::size_t i = 1; i < outputs.frame.size(); ++i) {
@@ -258,8 +264,11 @@ void hardware_error_to_sound_is_traceable_without_recursion() {
     for (int i = 0; i < 4; ++i) { clock.advance(Config::AudioCommandMs); diagnostics.update(); }
     uart.respond(0x43, Config::DefaultVolume); diagnostics.update();
     diagnostics.command(parseCommand("play 1")); clock.advance(Config::AudioCommandMs); diagnostics.update();
+    clock.advance(Config::AudioCommandMs); diagnostics.update();
     uart.respond(0x40, 6); diagnostics.update();
     TEST_ASSERT_TRUE(log.contains("role=error track=2999 reason=[ERROR] YX5200 module error 6"));
+    clock.advance(Config::AudioCommandMs); diagnostics.update();
+    TEST_ASSERT_EQUAL(0x06, uart.tx.back()[3]); TEST_ASSERT_EQUAL(Config::DefaultVolume, uart.tx.back()[6]);
     clock.advance(Config::AudioCommandMs); diagnostics.update();
     TEST_ASSERT_EQUAL(0x12, uart.tx.back()[3]);
     TEST_ASSERT_EQUAL(Config::ErrorTrack, (uart.tx.back()[5] << 8) | uart.tx.back()[6]);
@@ -279,6 +288,17 @@ void boot_input_logs_explain_late_mode_selection_error_sound() {
     Rig selected; selected.menu.begin(); selected.input("3\n");
     TEST_ASSERT_TRUE(selected.log.contains("phase=boot-menu input=\"3\""));
 }
+void music_uses_maximum_and_system_sounds_restore_default_volume() {
+    Rig r; r.diagnostics.begin(AppMode::AudioTest);
+    r.command("play 1"); TEST_ASSERT_EQUAL(30, r.audio.volume);
+    r.command("boot"); TEST_ASSERT_EQUAL(12, r.audio.volume);
+    r.command("play 2"); TEST_ASSERT_EQUAL(30, r.audio.volume);
+    r.command("error"); TEST_ASSERT_EQUAL(12, r.audio.volume);
+    r.command("play 2998"); TEST_ASSERT_EQUAL(12, r.audio.volume);
+    r.command("play 2999"); TEST_ASSERT_EQUAL(12, r.audio.volume);
+    r.command("play 1"); r.command("volume 8"); TEST_ASSERT_EQUAL(8, r.audio.volume);
+    r.command("play 1"); TEST_ASSERT_EQUAL(30, r.audio.volume);
+}
 int main() {
     UNITY_BEGIN(); RUN_TEST(parser_valid_commands); RUN_TEST(parser_rejects_malformed_input);
     RUN_TEST(line_buffer_crlf_backspace_overflow_and_recovery); RUN_TEST(boot_default_boundary_and_no_serial_dependency);
@@ -292,5 +312,6 @@ int main() {
     RUN_TEST(sound_logs_explain_manual_automatic_and_suppressed_cues);
     RUN_TEST(hardware_error_to_sound_is_traceable_without_recursion);
     RUN_TEST(boot_input_logs_explain_late_mode_selection_error_sound);
+    RUN_TEST(music_uses_maximum_and_system_sounds_restore_default_volume);
     return UNITY_END();
 }

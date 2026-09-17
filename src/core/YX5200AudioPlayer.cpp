@@ -169,6 +169,17 @@ bool YX5200AudioPlayer::stop() {
     count_ = 0;
     return enqueue(0x16);
 }
+bool YX5200AudioPlayer::playTrackAtVolume(uint16_t track, int volume) {
+    if (track < 1 || track > Config::MaxTrack) return playTrack(track);
+    if (volume < 0 || volume > Config::MaxVolume) return setVolume(volume);
+    if (status_ != AudioStatus::Ready) return enqueue(0x12, track);
+    if (queue_.size() - count_ < 2) {
+        trace("REJECT", 0x12, track, "volume and track require two free queue slots");
+        return false;
+    }
+    // Reserve both commands before changing volume; preserve their UART order.
+    return setVolume(volume) && playTrack(track);
+}
 bool YX5200AudioPlayer::pause() { return enqueue(0x0e); }
 bool YX5200AudioPlayer::resume() { return enqueue(0x0d); }
 bool YX5200AudioPlayer::next() { return enqueue(0x01); }

@@ -62,6 +62,7 @@ void reward_once_then_red_at_boundary() {
         Rig r; r.clock.time = start; r.reward();
         TEST_ASSERT_EQUAL_INT(RobotState::Reward, r.robot.state());
         TEST_ASSERT_EQUAL(Config::RewardTrack, r.audio.track);
+        TEST_ASSERT_EQUAL(30, r.audio.volume);
         TEST_ASSERT_TRUE(r.lights.dancing);
         r.sensor.down = true;
         r.robot.update(); r.robot.simulateHighFive(); r.robot.update();
