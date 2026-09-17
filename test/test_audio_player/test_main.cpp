@@ -41,6 +41,7 @@ void parser_rejects_corruption_and_resynchronizes() {
     TEST_ASSERT_EQUAL(0x41, frame.command);
 }
 void startup_pacing_verifies_volume_not_just_ack() {
+    TEST_ASSERT_EQUAL(30, Config::DefaultVolume);
     Rig r; TEST_ASSERT_EQUAL_INT(AudioStatus::Off, r.audio.status()); r.audio.update();
     TEST_ASSERT_FALSE(r.audio.playTrack(1)); TEST_ASSERT_TRUE(r.audio.begin());
     r.tick(Config::AudioBootMs - 1); TEST_ASSERT_EQUAL(0, r.uart.tx.size());
@@ -48,7 +49,8 @@ void startup_pacing_verifies_volume_not_just_ack() {
     r.tick(Config::AudioCommandMs - 1); TEST_ASSERT_EQUAL(1, r.uart.tx.size());
     r.tick(1); r.last(0x09, 2); r.tick(); r.last(0x06, Config::DefaultVolume);
     r.tick(); r.last(0x1a); r.tick(); r.last(0x43);
-    r.uart.respond(0x41, 0); r.uart.respond(0x3f, 2); r.uart.respond(0x43, 30); r.audio.update();
+    r.uart.respond(0x41, 0); r.uart.respond(0x3f, 2);
+    r.uart.respond(0x43, (Config::DefaultVolume + 1) % (Config::MaxVolume + 1)); r.audio.update();
     TEST_ASSERT_EQUAL_INT(AudioStatus::Starting, r.audio.status());
     r.uart.respond(0x43, Config::DefaultVolume); r.audio.update();
     TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status()); TEST_ASSERT_TRUE(r.log.contains("[OK] YX5200"));

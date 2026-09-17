@@ -8,7 +8,7 @@ The ESP32 controls a **YX5200 Mini MP3 module** over UART2; the YX5200 decodes t
 
 ## Status and verification
 
-The ESP32 firmware builds, and 46 native tests pass across six suites, plus 12 host tests for SD preparation, audio conversion and GPIO output. A clean Apple Clang coverage run measured **100% core line coverage and 97.8% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
+The ESP32 firmware builds, and 46 native tests pass across six suites, plus 15 host tests for SD preparation, audio conversion/EQ and GPIO output. A clean Apple Clang coverage run measured **100% core line coverage and 97.8% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
 
 Physical commissioning is still required: no ESP32 USB device was available during implementation. Tests verify application behavior and protocol handling, not actual sound, wiring, switch mechanics, supply stability, or this particular YX5200 module's compatibility. Follow the staged bring-up checklist before installing the electronics in cardboard.
 
@@ -145,7 +145,7 @@ PAM8610 L+ ------------------- speaker +
 PAM8610 L- ------------------- speaker -   (NOT ground)
 ```
 
-Do not connect YX5200 SPK+/SPK− into the PAM8610. Do not ground L−/speaker−, join amplifier outputs, or use an earth-grounded oscilloscope clip on a speaker output. The PAM8610 has bridge outputs. Its manufacturer's datasheet includes 4 Ω load characteristics; the board's advertised “15 W” is not a guaranteed clean-output rating. Start with the amplifier gain low and firmware volume 12, then check distortion and temperature under load. Keep the specified 12 V architecture.
+Do not connect YX5200 SPK+/SPK− into the PAM8610. Do not ground L−/speaker−, join amplifier outputs, or use an earth-grounded oscilloscope clip on a speaker output. The PAM8610 has bridge outputs. Its manufacturer's datasheet includes 4 Ω load characteristics; the board's advertised “15 W” is not a guaranteed clean-output rating. Start with the amplifier gain low: firmware initializes volume to 30/30 (maximum), including boot/error sounds. Check distortion and temperature under load. Keep the specified 12 V architecture.
 
 Avoid powering the ESP32 from USB and external 5 V simultaneously until the exact carrier's USB/5V power path has been verified. For basic programming, turn off 12 V and use USB to power only the ESP32; disconnect the external 5 V feed to the board if its backfeed behavior is unknown. Keep unpowered peripheral signal connections disconnected to avoid phantom powering. For serial diagnostics with the external supply on, use a verified power arrangement or a suitable USB data connection that isolates host VBUS while retaining the signals/ground required by the carrier. Do not assume all “data-only” cables provide this arrangement.
 
@@ -187,7 +187,7 @@ Boot-held switches are displayed as pressed but generate no high-five until rele
 
 ### Audio initialization and errors
 
-`begin()` starts asynchronous initialization, not a blocking success check. After a 3-second module settling period, the driver sends stop, select TF/SD, conservative volume, DAC enable, and a volume query, at least 200 ms apart. `[OK] YX5200` requires a valid checksummed volume reply matching the configured startup volume. A reply timeout produces `[ERROR] YX5200 initialization failed`; UART failure, SD removal, module errors, and runtime disconnects are also logged. FULL continues processing LEDs, sensor, timing, and diagnostics if audio fails.
+`begin()` starts asynchronous initialization, not a blocking success check. After a 3-second module settling period, the driver sends stop, select TF/SD, configured volume, DAC enable, and a volume query, at least 200 ms apart. `[OK] YX5200` requires a valid checksummed volume reply matching the configured startup volume. A reply timeout produces `[ERROR] YX5200 initialization failed`; UART failure, SD removal, module errors, and runtime disconnects are also logged. FULL continues processing LEDs, sensor, timing, and diagnostics if audio fails.
 
 Runtime commands go into a fixed eight-entry queue and return success **only for acceptance**, not audible playback. Invalid volumes/tracks, failed/not-ready audio, and queue overflow return failure. Commands do not wait for ACKs. The driver parses error/finish notifications and polls status every 5 seconds with a 1.5-second response timeout. Missing-file/out-of-range replies (module errors 5/6) after initialization keep the link usable and raise a one-shot error event; other module errors fail the driver. `status` reports cached driver health; there is no claim that the speaker is connected or that a file exists. Repair wiring/card issues and send `retry` to restart initialization. Commands received before audio is ready are rejected rather than replayed unexpectedly later. Stop discards pending playback and takes priority over health polling at the next permitted transmit slot.
 
@@ -228,6 +228,14 @@ For the current card, `high-enough.wav` is converted to reward track 1. The orig
 
 The driver directly implements the YX5200/DFPlayer-compatible 10-byte protocol at 9600 baud, 8N1. DFRobot documentation is used as a **protocol reference**, not as a requirement to replace the existing YX5200. Module variants can differ; AUDIO TEST verifies the actual module. The checksum is the 16-bit two's complement of bytes 1–6 (version through parameter-low). For volume 15, the frame is `7E FF 06 06 00 00 0F FE E6 EF`. Some older manual examples contain inconsistent checksums; this implementation follows the algorithm and tests complete frames and corrupted/fragmented replies.
 
+### Music equalizer
+
+[config/audio-eq.json](config/audio-eq.json) controls EQ applied to music copies by `scripts/prepare_sd.py`: an 80 Hz high-pass, −6 dB bass shelf at 120 Hz, −3 dB low-mid band at 300 Hz, unchanged mids at 1500 Hz, and −3 dB preamp headroom. This is an adjustable starting point, not a measured speaker calibration. Edit `bass_db`, `lows_db` and `mids_db`; their frequencies and band Q values are configurable too. Invalid settings and insufficient headroom for positive gains fail before writing the destination.
+
+Re-run the existing SD preparation command with `--replace` and all original music files to apply the profile. `--eq-config /path/to/profile.json` selects another profile; `--no-eq` or `"enabled": false` disables it. The manifest records the profile/filter and which tracks use it. Original sources and boot/error audio are not EQ-processed. Always regenerate from original sources, not previously processed playback copies.
+
+This is **offline EQ**, not a live firmware control: the YX5200 UART only offers fixed presets, not independent band gains ([module manual](https://datasheet4u.com/pdf-down/Y/X/5/YX5200-24SS-YueXin.pdf)). No EQ command or extra initialization step is added to the firmware. Uploading firmware or editing the JSON alone does not alter existing SD audio. Filters run through [FFmpeg](https://ffmpeg.org/ffmpeg-filters.html). Keep amplifier gain low; EQ does not guarantee distortion-free output at maximum volume.
+
 ## Configuration and architecture
 
 All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB GPIOs, sensor/UART GPIOs, UART number/baud, serial baud, animation/cycle timings, state durations, debounce, reward track, volume, boot selection, UART pacing/timeouts/queue capacity, and serial buffer limits.
@@ -245,7 +253,7 @@ All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB
 | Green | Wait indefinitely |
 | Debounce | 30 ms |
 | Reward / boot / error track | 1 / 2998 / 2999 |
-| Initial volume | 12 (supported volume range 0–30) |
+| Initial volume | 30 (maximum; applies to music and system sounds) |
 | Boot selection timeout / default | 5000 ms / FULL |
 
 To remap the LEDs, edit `Config::Pins::LedRgb`: rows are top/middle/bottom pairs and columns are R/G/B. Compile-time checks reject duplicate pins, sensor/UART conflicts and pins outside the safe output list. RobotController needs no changes. Channels are on/off, not PWM; brightness and mixed-yellow balance depend on the LED/resistor combination. Initialization sets all nine outputs HIGH (off), and each frame blanks all channels before pulling the selected cathodes LOW. Recommended external pull-ups keep them off before initialization.
