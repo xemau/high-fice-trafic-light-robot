@@ -1,25 +1,15 @@
-# SD card prepared on 2026-09-15, updated 2026-09-22
+# SD audio prepared on 2026-09-22
 
-The removable 15.6 GB card was formatted with an MBR partition table and FAT32 filesystem, volume name `ROBOT`. Device numbers can change, so identify the card again before any future formatting operation.
+The Desktop `TEMPROBOT` staging folder contains 75 popular-music excerpts under `MP3/`, numbered continuously from `0001.mp3` through `0075.mp3`. The previous three-track folder is preserved beside it as `TEMPROBOT-backup-before-75-songs`.
 
-The three reward tracks were converted to 44.1 kHz stereo, 128 kbps constant-bitrate MP3 and decoded to check the generated files. The source files in Downloads were not modified. Audio files are not committed to the repository.
+Each excerpt is a metadata-free 44.1 kHz stereo, 128 kbps constant-bitrate MP3. All 75 files were decoded after final numbering; every decoded duration was 30.302 seconds. The installed copy was then checked against every size and SHA-256 value in its manifest. Its total MP3 payload is 36,362,400 bytes. Audio files are not committed to the repository.
 
-| Role | Original source | Playback copy | Playback ID |
-| --- | --- | --- | --- |
-| Reward | Pufino - Rock Me Now (freetouse.com).mp3 | MP3/0001.mp3 | 1 |
-| Reward | Aetheric - Snap Crackle (freetouse.com).mp3 | MP3/0002.mp3 | 2 |
-| Reward | Moavii - Root (freetouse.com).mp3 | MP3/0003.mp3 | 3 |
+`audio-manifest.json` is the complete track list. Each track record contains its playback number, artist, title, source page and channel, excerpt start and duration, selection method, and playback filename. Each file record contains its exact byte size and SHA-256 hash.
 
-The card's `audio-manifest.json` records these three files with sizes and SHA-256 hashes. All hashes were verified by reading back the card. The obsolete `MP3/2998.mp3`, `MP3/2999.mp3`, and `/system` directory were removed on 2026-09-22.
+The collection starts with Sabrina Carpenter's “Espresso” as track 1 and ends with Madonna's “Hung Up” as track 75. The obsolete `MP3/2998.mp3`, `MP3/2999.mp3`, and `/system` directory are absent.
 
-`diskutil verifyVolume` completed with filesystem check exit code 0 after the update.
+The staging folder must be copied to the FAT32 / MBR card named `ROBOT` before hardware playback. Copy both `MP3/` and `audio-manifest.json`, then verify the copied files before ejecting. Device numbers can change, so identify the card again before any formatting operation.
 
-| File | SHA-256 |
-| --- | --- |
-| MP3/0001.mp3 | 6db7f132eb40ab2ce7322c0efd0117623f87defccd471e848d779b13b382a967 |
-| MP3/0002.mp3 | 20f5a34d85572eda7c0cbf690d9ab26e32e33dcc047053e1374ad3eb69cae97d |
-| MP3/0003.mp3 | 48630da5120067a16e0b8f42a179531ef57dd6a5c6dc4a546404178d44320019 |
+The YX5200 addresses these files with MP3-folder command `0x12`. Firmware selects a random number in 1–75 and avoids an immediate repeat. The source filenames do not need numeric prefixes when using `scripts/prepare_sd.py`; the module itself cannot convert audio or open arbitrary paths.
 
-The source filenames do not need numeric prefixes. `scripts/prepare_sd.py` performs conversion and numeric addressing automatically. The YX5200 cannot itself convert arbitrary audio formats or open arbitrary paths.
-
-Next hardware check: safely eject and insert the card with the YX5200 unpowered. Reset the uploaded firmware, wait for FULL to start and for `[OK] YX5200`, then optionally issue `play 1`, `play 2`, and `play 3` before testing a physical high-five. Actual module decoding and audible output remain unverified until that bench test.
+Next hardware check: safely eject and insert the copied card with the YX5200 unpowered. Reset the uploaded firmware, wait for FULL to start and for `[OK] YX5200`, then issue several `play N` commands across the 1–75 range before testing repeated physical high-fives. Actual module decoding and audible output remain unverified until that bench test.

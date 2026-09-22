@@ -122,31 +122,31 @@ void custom_settings_and_rollover() {
 }
 void reward_tracks_are_randomized_without_immediate_repeats() {
     Rig r;
-    for (int i = 0; i < 18; ++i) {
+    for (uint32_t i = 0; i < Config::RewardTrackCount * 20u; ++i) {
         r.green();
         r.clock.advance(static_cast<uint32_t>(i * 17 + 3));
         r.sensor.event = true; r.robot.update();
         r.clock.advance(Config::RewardMs); r.robot.update();
     }
-    unsigned seen = 0;
+    std::array<bool, Config::RewardTrackCount> seen{};
     for (std::size_t i = 0; i < r.audio.tracks.size(); ++i) {
         const auto track = r.audio.tracks[i];
         TEST_ASSERT_GREATER_OR_EQUAL(Config::RewardTrack, track);
         TEST_ASSERT_LESS_THAN(Config::RewardTrack + Config::RewardTrackCount, track);
-        seen |= 1u << (track - Config::RewardTrack);
+        seen[track - Config::RewardTrack] = true;
         if (i) TEST_ASSERT_NOT_EQUAL(r.audio.tracks[i - 1], track);
     }
-    TEST_ASSERT_EQUAL((1u << Config::RewardTrackCount) - 1, seen);
+    for (bool selected : seen) TEST_ASSERT_TRUE(selected);
 }
 void reward_seed_changes_the_first_track() {
-    unsigned seen = 0;
-    for (uint32_t seed = 1; seed <= 12; ++seed) {
+    std::array<bool, Config::RewardTrackCount> seen{};
+    for (uint32_t seed = 1; seed <= Config::RewardTrackCount * 20u; ++seed) {
         Rig r;
         r.robot.seedRandom(seed);
         r.reward();
-        seen |= 1u << (r.audio.track - Config::RewardTrack);
+        seen[r.audio.track - Config::RewardTrack] = true;
     }
-    TEST_ASSERT_EQUAL((1u << Config::RewardTrackCount) - 1, seen);
+    for (bool selected : seen) TEST_ASSERT_TRUE(selected);
 }
 void physical_held_switch_requires_release_and_new_press() {
     FakeClock clock; FakeInput input; FakeAudio audio; FakeLights lights; FakeLog log;
