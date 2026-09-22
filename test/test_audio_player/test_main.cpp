@@ -93,7 +93,7 @@ void device_error_sd_removal_finish_and_unrelated_frames() {
     TEST_ASSERT_TRUE(r.log.contains("track finished")); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
     r.uart.respond(0x3b, 1); r.audio.update(); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
     r.uart.respond(0x3b, 2); r.audio.update(); TEST_ASSERT_EQUAL_INT(AudioStatus::Failed, r.audio.status());
-    r.ready(); r.uart.respond(0x40, 3); r.audio.update(); TEST_ASSERT_EQUAL_INT(AudioStatus::Failed, r.audio.status());
+    r.ready(); r.uart.respond(0x40, 3); r.audio.update(); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
     TEST_ASSERT_TRUE(r.log.contains("module error 3"));
 }
 void missing_track_keeps_normal_playback_available() {
@@ -105,6 +105,28 @@ void missing_track_keeps_normal_playback_available() {
     }
     Rig starting; starting.audio.begin(); starting.uart.respond(0x40, 6); starting.audio.update();
     TEST_ASSERT_EQUAL_INT(AudioStatus::Failed, starting.audio.status());
+}
+void runtime_error_does_not_latch_or_discard_the_next_reward() {
+    for (uint16_t code : {1, 2, 3, 4, 5, 6, 7}) {
+        Rig r; r.ready();
+        TEST_ASSERT_TRUE(r.audio.playTrack(3)); r.tick();
+        TEST_ASSERT_TRUE(r.audio.stop());
+        TEST_ASSERT_TRUE(r.audio.playTrack(1));
+        r.uart.respond(0x40, code); r.tick();
+        TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
+        r.last(0x12, 1);
+        TEST_ASSERT_TRUE(r.audio.stop()); r.tick();
+        TEST_ASSERT_TRUE(r.audio.playTrack(2)); r.tick(); r.last(0x12, 2);
+    }
+}
+void rejected_status_query_does_not_disable_playback() {
+    Rig r; r.ready(); r.tick(Config::AudioPollMs); r.last(0x42);
+    r.uart.respond(0x40, 3); r.audio.update();
+    TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
+    TEST_ASSERT_TRUE(r.log.contains("runtime polling disabled"));
+    TEST_ASSERT_TRUE(r.audio.playTrack(2)); r.tick(); r.last(0x12, 2);
+    const auto sent = r.uart.tx.size();
+    r.tick(Config::AudioPollMs * 2); TEST_ASSERT_EQUAL(sent, r.uart.tx.size());
 }
 void health_poll_response_and_unsupported_timeout() {
     Rig r; r.ready(); r.tick(Config::AudioPollMs); r.last(0x42);
@@ -146,5 +168,7 @@ int main() {
     RUN_TEST(device_error_sd_removal_finish_and_unrelated_frames); RUN_TEST(health_poll_response_and_unsupported_timeout);
     RUN_TEST(partial_frames_timeout_and_bounded_rx); RUN_TEST(startup_and_poll_rollover);
     RUN_TEST(missing_track_keeps_normal_playback_available);
+    RUN_TEST(runtime_error_does_not_latch_or_discard_the_next_reward);
+    RUN_TEST(rejected_status_query_does_not_disable_playback);
     return UNITY_END();
 }

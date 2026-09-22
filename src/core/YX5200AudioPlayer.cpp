@@ -70,6 +70,11 @@ bool YX5200AudioPlayer::send(uint8_t command, uint16_t parameter) {
         return false;
     }
     lastSent_ = clock_.now();
+    lastCommand_ = {command, parameter};
+    char message[80];
+    std::snprintf(message, sizeof(message), "[AUDIO TX] t=%lu cmd=0x%02X arg=%u",
+                  static_cast<unsigned long>(lastSent_), command, parameter);
+    log_.log(message);
     return true;
 }
 
@@ -99,11 +104,18 @@ bool YX5200AudioPlayer::setVolume(int volume) {
 
 void YX5200AudioPlayer::receive(const Mp3Frame& frame) {
     if (frame.command == 0x40) {
-        char message[64];
-        std::snprintf(message, sizeof(message), "[ERROR] YX5200 module error %u", frame.parameter);
-        if (status_ == AudioStatus::Ready && (frame.parameter == 5 || frame.parameter == 6)) {
-            count_ = 0;
+        char message[96];
+        std::snprintf(message, sizeof(message),
+                      "[ERROR] YX5200 module error %u; last TX=0x%02X arg=%u",
+                      frame.parameter, lastCommand_.command, lastCommand_.parameter);
+        if (status_ == AudioStatus::Ready) {
+            // Command rejection is not a transport disconnect. Replies carry no command ID.
             log_.log(message);
+            if (awaitingStatus_) {
+                awaitingStatus_ = false;
+                pollingEnabled_ = false;
+                log_.log("[WARN] YX5200 error during status query; runtime polling disabled");
+            }
         } else fail(message);
     } else if (frame.command == 0x3b && (frame.parameter & 2)) {
         fail("[ERROR] YX5200 SD card removed");

@@ -29,6 +29,7 @@ void setup() {
     app().lights.seedAnimation(seed);
     app().diagnostics.seedRandom(esp_random() ^ (seed << 1));
     app().console.begin();
+    app().console.log("[BOOT] High-Five Robot built " __DATE__ " " __TIME__);
     app().diagnostics.begin(AppMode::Full);
 }
 

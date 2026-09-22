@@ -201,6 +201,7 @@ void full_integration_with_real_core_and_fake_electrical_io() {
     TEST_ASSERT_EQUAL_INT(RobotState::Red, diagnostics.robotState());
     TEST_ASSERT_EQUAL(0x16, uart.tx.back()[3]);
     const auto commandsAfterStop = uart.tx.size();
+    uart.respond(0x40, 1);
     clock.advance(Config::AudioCommandMs); diagnostics.update();
     TEST_ASSERT_EQUAL(commandsAfterStop, uart.tx.size());
     TEST_ASSERT_TRUE(outputs.frame[0].red);
@@ -217,6 +218,24 @@ void full_integration_with_real_core_and_fake_electrical_io() {
     clock.advance(Config::AudioCommandMs); diagnostics.update();
     TEST_ASSERT_EQUAL(0x12, uart.tx.back()[3]);
     TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, audio.status());
+    for (int cycle = 0; cycle < 3; ++cycle) {
+        const auto previousTrack = uart.tx.back()[6];
+        clock.advance(Config::RewardMs); diagnostics.update();
+        TEST_ASSERT_EQUAL_INT(RobotState::Red, diagnostics.robotState());
+        TEST_ASSERT_EQUAL(0x16, uart.tx.back()[3]);
+        uart.respond(0x40, 3);
+        input.level = true; diagnostics.update();
+        clock.advance(Config::RedMs); diagnostics.update();
+        clock.advance(Config::YellowMs); diagnostics.update();
+        TEST_ASSERT_EQUAL_INT(RobotState::GreenWaiting, diagnostics.robotState());
+        input.level = false; diagnostics.update();
+        clock.advance(Config::DebounceMs); diagnostics.update();
+        clock.advance(Config::AudioCommandMs); diagnostics.update();
+        TEST_ASSERT_EQUAL_INT(RobotState::Reward, diagnostics.robotState());
+        TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, audio.status());
+        TEST_ASSERT_EQUAL(0x12, uart.tx.back()[3]);
+        TEST_ASSERT_NOT_EQUAL(previousTrack, uart.tx.back()[6]);
+    }
 }
 void system_sounds_are_never_queued() {
     Rig r; r.diagnostics.begin(AppMode::Full); r.audio.state = AudioStatus::Starting;

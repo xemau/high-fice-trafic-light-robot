@@ -38,6 +38,7 @@ private:
     IUart& uart_;
     ILogger& log_;
     Mp3Parser parser_;
+    Mp3Frame lastCommand_{};
     std::array<Mp3Frame, Config::AudioQueueSize> queue_{};
     std::size_t head_ = 0, count_ = 0;
     AudioStatus status_ = AudioStatus::Off;
