@@ -3,7 +3,7 @@
 
 enum class CommandType {
     Invalid, SelectMode, Red, Yellow, Green, Off, Cycle, Dance,
-    Play, Stop, Pause, Resume, Volume, Next, Previous, HighFive, Status, Reset, Help, Retry, BootSound, ErrorSound
+    Play, Stop, Pause, Resume, Volume, Next, Previous, HighFive, Status, Reset, Help, Retry
 };
 struct Command { CommandType type = CommandType::Invalid; int value = 0; };
 Command parseCommand(const char* line);

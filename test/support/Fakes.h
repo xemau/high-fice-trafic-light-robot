@@ -33,7 +33,7 @@ struct FakeSensor : IHighFiveSensor {
     bool takePress() override { ++takes; const bool p = event; event = false; return p; }
 };
 struct FakeAudio : IAudioPlayer {
-    bool ok = true, error = false;
+    bool ok = true;
     int begins = 0, updates = 0, plays = 0, stops = 0, pauses = 0, resumes = 0, nexts = 0, previouses = 0;
     uint16_t track = 0;
     std::vector<uint16_t> tracks;
@@ -49,7 +49,6 @@ struct FakeAudio : IAudioPlayer {
     bool next() override { ++nexts; return ok; }
     bool previous() override { ++previouses; return ok; }
     AudioStatus status() const override { return state; }
-    bool takeError() override { const bool pending = error; error = false; return pending; }
 };
 struct FakeLights : ITrafficLight {
     bool ok = true, dancing = false;

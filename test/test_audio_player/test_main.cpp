@@ -66,15 +66,15 @@ void all_commands_and_volume_validation() {
     TEST_ASSERT_TRUE(r.audio.setVolume(0)); r.tick(); r.last(0x06, 0);
     TEST_ASSERT_TRUE(r.audio.setVolume(30)); r.tick(); r.last(0x06, 30);
     TEST_ASSERT_FALSE(r.audio.setVolume(-1)); TEST_ASSERT_FALSE(r.audio.setVolume(31)); TEST_ASSERT_FALSE(r.audio.setVolume(1000));
-    TEST_ASSERT_TRUE(r.audio.stop()); r.last(0x16); r.tick(); r.last(0x16);
+    TEST_ASSERT_TRUE(r.audio.stop()); r.last(0x16);
 }
 void queue_overflow_and_stop_priority() {
     Rig r; r.ready();
     for (std::size_t i = 0; i < Config::AudioQueueSize; ++i) TEST_ASSERT_TRUE(r.audio.playTrack(i + 1));
     TEST_ASSERT_FALSE(r.audio.pause());
     const auto count = r.uart.tx.size(); r.audio.update(); TEST_ASSERT_EQUAL(count, r.uart.tx.size());
-    TEST_ASSERT_TRUE(r.audio.stop()); r.last(0x16); r.tick(); r.last(0x16);
-    r.tick(); TEST_ASSERT_EQUAL(count + 2, r.uart.tx.size());
+    TEST_ASSERT_TRUE(r.audio.stop()); r.last(0x16);
+    r.tick(); TEST_ASSERT_EQUAL(count + 1, r.uart.tx.size());
     for (int i = 0; i < 12; ++i) { TEST_ASSERT_TRUE(r.audio.playTrack(i + 1)); r.tick(); r.last(0x12, i + 1); }
 }
 void missing_module_timeout_retry_and_transport_failure() {
@@ -94,22 +94,17 @@ void device_error_sd_removal_finish_and_unrelated_frames() {
     r.uart.respond(0x3b, 1); r.audio.update(); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
     r.uart.respond(0x3b, 2); r.audio.update(); TEST_ASSERT_EQUAL_INT(AudioStatus::Failed, r.audio.status());
     r.ready(); r.uart.respond(0x40, 3); r.audio.update(); TEST_ASSERT_EQUAL_INT(AudioStatus::Failed, r.audio.status());
-    TEST_ASSERT_TRUE(r.log.contains("module error 3")); TEST_ASSERT_TRUE(r.audio.takeError());
-    TEST_ASSERT_FALSE(r.audio.takeError());
+    TEST_ASSERT_TRUE(r.log.contains("module error 3"));
 }
-void missing_track_keeps_error_sound_playable_without_recursion() {
+void missing_track_keeps_normal_playback_available() {
     for (uint16_t code : {5, 6}) {
         Rig r; r.ready(); r.audio.playTrack(1); r.tick();
         r.uart.respond(0x40, code); r.audio.update();
         TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
-        TEST_ASSERT_TRUE(r.audio.takeError()); TEST_ASSERT_FALSE(r.audio.takeError());
-        TEST_ASSERT_TRUE(r.audio.playTrack(Config::ErrorTrack)); r.tick(); r.last(0x12, Config::ErrorTrack);
-        r.uart.respond(0x40, 6); r.audio.update();
-        TEST_ASSERT_FALSE(r.audio.takeError()); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
+        TEST_ASSERT_TRUE(r.audio.playTrack(2)); r.tick(); r.last(0x12, 2);
     }
     Rig starting; starting.audio.begin(); starting.uart.respond(0x40, 6); starting.audio.update();
     TEST_ASSERT_EQUAL_INT(AudioStatus::Failed, starting.audio.status());
-    TEST_ASSERT_TRUE(starting.audio.takeError());
 }
 void health_poll_response_and_unsupported_timeout() {
     Rig r; r.ready(); r.tick(Config::AudioPollMs); r.last(0x42);
@@ -119,7 +114,6 @@ void health_poll_response_and_unsupported_timeout() {
     r.tick(Config::AudioResponseMs - 1); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
     r.tick(1); TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, r.audio.status());
     TEST_ASSERT_TRUE(r.log.contains("polling disabled"));
-    TEST_ASSERT_FALSE(r.audio.takeError());
     const auto sent = r.uart.tx.size();
     r.tick(Config::AudioPollMs + Config::AudioResponseMs);
     TEST_ASSERT_EQUAL(sent, r.uart.tx.size());
@@ -151,6 +145,6 @@ int main() {
     RUN_TEST(queue_overflow_and_stop_priority); RUN_TEST(missing_module_timeout_retry_and_transport_failure);
     RUN_TEST(device_error_sd_removal_finish_and_unrelated_frames); RUN_TEST(health_poll_response_and_unsupported_timeout);
     RUN_TEST(partial_frames_timeout_and_bounded_rx); RUN_TEST(startup_and_poll_rollover);
-    RUN_TEST(missing_track_keeps_error_sound_playable_without_recursion);
+    RUN_TEST(missing_track_keeps_normal_playback_available);
     return UNITY_END();
 }

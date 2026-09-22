@@ -13,14 +13,10 @@ class PreparationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.boot = self.root / "boot.mp3"
-        self.error = self.root / "error.mp3"
-        self.boot.write_bytes(b"original boot")
-        self.error.write_bytes(b"original error")
         self.output = self.root / "card"
 
     def prepare(self, music=(), **kwargs):
-        return sd.prepare(self.output, self.boot, self.error, music,
+        return sd.prepare(self.output, music,
                           ffmpeg="fake-ffmpeg", convert_fn=kwargs.get("convert_fn", self.fake_conversion),
                           replace=kwargs.get("replace", False))
 
@@ -28,15 +24,13 @@ class PreparationTests(unittest.TestCase):
     def fake_conversion(source, target, ffmpeg):
         target.write_bytes(b"converted:" + source.read_bytes())
 
-    def test_original_names_and_configured_system_ids(self):
+    def test_original_names_and_configured_track_ids(self):
         song = self.root / "My favourite song 日本語.wav"
         song.write_bytes(b"reward")
         manifest = self.prepare([song])
         self.assertEqual(manifest["tracks"][0]["source_name"], song.name)
-        self.assertEqual([1, sd.read_layout()["BootTrack"], sd.read_layout()["ErrorTrack"]],
-                         [track["track"] for track in manifest["tracks"]])
-        self.assertEqual((self.output / "system/boot.mp3").read_bytes(), self.boot.read_bytes())
-        self.assertEqual((self.output / "system/error.mp3").read_bytes(), self.error.read_bytes())
+        self.assertEqual([1], [track["track"] for track in manifest["tracks"]])
+        self.assertFalse((self.output / "system").exists())
         self.assertEqual((self.output / "MP3/0001.mp3").read_bytes(), b"converted:reward")
         sd.verify(self.output, json.loads((self.output / sd.MANIFEST).read_text()))
 
@@ -53,25 +47,42 @@ class PreparationTests(unittest.TestCase):
     def test_failed_conversion_does_not_touch_card(self):
         def fail(source, target, ffmpeg):
             raise ValueError("Unsupported audio")
+        song = self.root / "song.mp3"
+        song.write_bytes(b"song")
         with self.assertRaisesRegex(ValueError, "Unsupported"):
-            self.prepare(convert_fn=fail)
+            self.prepare([song], convert_fn=fail)
         self.assertFalse(self.output.exists())
 
     def test_existing_library_is_not_overwritten(self):
-        self.prepare()
-        before = (self.output / "MP3/2998.mp3").read_bytes()
+        song = self.root / "song.mp3"
+        song.write_bytes(b"song")
+        self.prepare([song])
+        before = (self.output / "MP3/0001.mp3").read_bytes()
         with self.assertRaisesRegex(ValueError, "already contains"):
-            self.prepare()
-        self.assertEqual(before, (self.output / "MP3/2998.mp3").read_bytes())
+            self.prepare([song])
+        self.assertEqual(before, (self.output / "MP3/0001.mp3").read_bytes())
 
     def test_explicit_replace_preserves_unmanaged_files_and_removes_stale_tracks(self):
         song = self.root / "old.wav"
         song.write_bytes(b"old song")
         self.prepare([song])
+        legacy = ["MP3/2998.mp3", "MP3/2999.mp3", "system/boot.mp3", "system/error.mp3"]
+        manifest_path = self.output / sd.MANIFEST
+        manifest = json.loads(manifest_path.read_text())
+        for name in legacy:
+            path = self.output / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(name.encode())
+            manifest["files"].append({"path": name, "bytes": path.stat().st_size,
+                                      "sha256": sd.digest(path)})
+        manifest_path.write_text(json.dumps(manifest))
         note = self.output / "notes.txt"
         note.write_text("keep")
         manifest = self.prepare(replace=True)
         self.assertFalse((self.output / "MP3/0001.mp3").exists())
+        for name in legacy:
+            self.assertFalse((self.output / name).exists())
+        self.assertFalse((self.output / "system").exists())
         self.assertEqual("keep", note.read_text())
         sd.verify(self.output, manifest)
         (self.output / "MP3/0001.mp3").write_bytes(b"someone else's file")
@@ -79,7 +90,9 @@ class PreparationTests(unittest.TestCase):
             self.prepare([song], replace=True)
 
     def test_replace_rejects_modified_files_and_tampered_manifest(self):
-        self.prepare()
+        song = self.root / "song.mp3"
+        song.write_bytes(b"song")
+        self.prepare([song])
         manifest_path = self.output / sd.MANIFEST
         manifest = json.loads(manifest_path.read_text())
         manifest["files"][0]["path"] = "../outside"
@@ -88,12 +101,14 @@ class PreparationTests(unittest.TestCase):
             self.prepare(replace=True)
 
     def test_metadata_cleanup_is_limited_to_generated_files(self):
-        self.prepare()
-        sidecar = self.output / "MP3/._2998.mp3"
+        song = self.root / "song.mp3"
+        song.write_bytes(b"song")
+        self.prepare([song])
+        sidecar = self.output / "MP3/._0001.mp3"
         unrelated = self.output / "MP3/._other.mp3"
         sidecar.write_bytes(b"AppleDouble metadata")
         unrelated.write_bytes(b"keep")
-        sd.clean_metadata(self.output, {"MP3/2998.mp3"})
+        sd.clean_metadata(self.output, {"MP3/0001.mp3"})
         self.assertFalse(sidecar.exists())
         self.assertEqual(b"keep", unrelated.read_bytes())
 
@@ -113,8 +128,10 @@ class PreparationTests(unittest.TestCase):
     def test_missing_sources_and_tampered_outputs_rejected(self):
         with self.assertRaises(FileNotFoundError):
             self.prepare([self.root / "missing.wav"])
-        manifest = self.prepare()
-        (self.output / "MP3/2998.mp3").write_bytes(b"corrupt")
+        song = self.root / "song.mp3"
+        song.write_bytes(b"song")
+        manifest = self.prepare([song])
+        (self.output / "MP3/0001.mp3").write_bytes(b"corrupt")
         with self.assertRaisesRegex(ValueError, "Verification failed"):
             sd.verify(self.output, manifest)
         with self.assertRaisesRegex(ValueError, "Unsafe path"):
@@ -122,13 +139,12 @@ class PreparationTests(unittest.TestCase):
 
     def test_config_changes_are_read_and_invalid_expressions_rejected(self):
         config = self.root / "Config.h"
-        config.write_text("constexpr uint16_t RewardTrack = 1;\nconstexpr uint16_t BootTrack = 10;\n"
-                          "constexpr uint16_t ErrorTrack = 11;\nconstexpr int MaxTrack = 9999;\n")
-        self.assertEqual(10, sd.read_layout(config)["BootTrack"])
-        config.write_text(config.read_text().replace("ErrorTrack = 11", "ErrorTrack = 10"))
-        with self.assertRaisesRegex(ValueError, "overlapping"):
+        config.write_text("constexpr uint16_t RewardTrack = 1;\nconstexpr int MaxTrack = 9999;\n")
+        self.assertEqual(1, sd.read_layout(config)["RewardTrack"])
+        config.write_text(config.read_text().replace("RewardTrack = 1", "RewardTrack = 10000"))
+        with self.assertRaisesRegex(ValueError, "range"):
             sd.read_layout(config)
-        config.write_text(config.read_text().replace("BootTrack = 10", "BootTrack = 5 + 5"))
+        config.write_text(config.read_text().replace("RewardTrack = 10000", "RewardTrack = 5 + 5"))
         with self.assertRaisesRegex(ValueError, "literal"):
             sd.read_layout(config)
 
@@ -150,14 +166,14 @@ class RealConversionTests(unittest.TestCase):
                 subprocess.run([ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-i", str(wav), str(path)], check=True)
                 sources.append(path)
             output = root / "prepared"
-            manifest = sd.prepare(output, wav, sources[1], sources, ffmpeg)
-            self.assertEqual(6, len(manifest["tracks"]))
-            self.assertEqual(wav.read_bytes(), (output / "system/boot.wav").read_bytes())
+            manifest = sd.prepare(output, sources, ffmpeg)
+            self.assertEqual(4, len(manifest["tracks"]))
+            self.assertFalse((output / "system").exists())
             sd.verify(output, manifest)
             invalid = root / "broken.mp3"
             invalid.write_bytes(b"This is not audio")
             with self.assertRaisesRegex(ValueError, "Cannot convert"):
-                sd.prepare(root / "failed", invalid, wav, ffmpeg=ffmpeg)
+                sd.prepare(root / "failed", [invalid], ffmpeg=ffmpeg)
             self.assertFalse((root / "failed").exists())
 
 

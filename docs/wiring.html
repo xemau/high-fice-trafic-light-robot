@@ -744,7 +744,7 @@ NC / 2: unused; insulate this terminal.
         <p>Use the molded COM/NO/NC or 1/4/2 markings, not a guessed left-to-right pin order.
         With the switch disconnected and all power off, use continuity mode:
         COM–NO is open when released and closed when pressed; COM–NC does the opposite.
-        Verify repeated presses in SENSOR TEST. The DB1's published power-switch ratings do not
+        Verify repeated release/press cycles in FULL. The DB1's published power-switch ratings do not
         by themselves guarantee reliable operation at the tiny GPIO pull-up current.</p>
         <p>Sources:
         <a href="https://www.neuhold-elektronik.at/media/6d/1b/17/1636722530/N4652_Datenblatt.pdf?ts=1636722530">Cherry DB-series datasheet</a>
@@ -911,8 +911,8 @@ NC / 2: unused; insulate this terminal.
         <p>The reward timer starts at the high-five. For the final four seconds, only the middle
         yellow pair remains on. At the deadline, firmware queues an audio stop
         and shows red; audible timing includes UART/module latency. After red and yellow, green waits
-        indefinitely for a new press. Manual AUDIO TEST playback and boot/error sounds do not have
-        this reward timeout. Before the warning, seeded full-spectrum colors fade across the three
+        indefinitely for a new press. Manual playback commands do not have this reward timeout.
+        Before the warning, seeded full-spectrum colors fade across the three
         pairs over randomized 2–3.5 second transitions. The nine channels use 5kHz PWM with 20ms
         brightness updates; there are no deliberate black frames or sudden strobes, and both LEDs
         in each pair match.</p>
@@ -923,8 +923,6 @@ NC / 2: unused; insulate this terminal.
                 <tr><td>Reward · track 1</td><td><code>/MP3/0001.mp3</code></td><td>Pufino — Rock Me Now</td></tr>
                 <tr><td>Reward · track 2</td><td><code>/MP3/0002.mp3</code></td><td>Aetheric — Snap Crackle</td></tr>
                 <tr><td>Reward · track 3</td><td><code>/MP3/0003.mp3</code></td><td>Moavii — Root</td></tr>
-                <tr><td>Boot · track 2998</td><td><code>/MP3/2998.mp3</code></td><td>Original retained at <code>/system/boot.mp3</code></td></tr>
-                <tr><td>Error · track 2999</td><td><code>/MP3/2999.mp3</code></td><td>Original retained at <code>/system/error.mp3</code></td></tr>
             </tbody>
         </table>
         <p>The importer accepts original filenames and converts supported audio to module-compatible MP3.
@@ -939,17 +937,16 @@ NC / 2: unused; insulate this terminal.
                 Power off before making connections; never route amplifier power through a breadboard.</li>
             <li>Flash the paired-RGB firmware. Use the verified USB/external-power arrangement;
                 old single-color firmware does not match this active-low nine-channel wiring.</li>
-            <li>Open the 115200-baud serial monitor and reset. Send a mode number followed by Enter
-                within 5 seconds; otherwise FULL starts automatically.</li>
-            <li>Choose <strong>2 — LIGHTS TEST</strong>: verify top red, middle yellow, bottom green,
-                <code>off</code>, <code>cycle</code>, and <code>dance</code>.
-                Check both LEDs in each pair, all nine channels, reset-off behavior, resistor
-                currents, yellow balance and blue/green brightness.</li>
+            <li>Open the 115200-baud serial monitor and reset. Confirm that FULL starts immediately.</li>
+            <li>Use <code>lights red</code>, <code>lights yellow</code>, <code>lights green</code> and
+                <code>lights off</code> to verify the three pairs. Trigger a reward to check both LEDs
+                in each pair, all nine channels, smooth fading, reset-off behavior, resistor currents,
+                yellow balance and blue/green brightness.</li>
             <li>With power off, connect DB1 COM/1 to GND and NO/4 to GPIO27; leave NC/2 unused.
-                Choose <strong>4 — SENSOR TEST</strong>: confirm released HIGH, pressed LOW and one event per press/release.
-                Choose <strong>3 — AUDIO TEST</strong>: verify initialization, then
-                <code>boot</code>, <code>error</code>, <code>play 1</code> and <code>stop</code>.</li>
-            <li>Reboot into <strong>1 — FULL</strong> and verify the 3s / 1s / high-five / 30s sequence.
+                In FULL, confirm released HIGH, pressed LOW and one event per release/press cycle.
+                Verify audio initialization, then optionally issue <code>play 1</code>, pause/resume,
+                <code>stop</code>, volume and status commands.</li>
+            <li>Verify the 3s / 1s / high-five / 30s sequence with the physical switch.
                 Measure supply voltages under load and check for overheating, resets and loose joints.</li>
         </ol>
         <div class="warning">

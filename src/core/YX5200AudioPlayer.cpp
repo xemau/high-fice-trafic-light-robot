@@ -42,14 +42,7 @@ void YX5200AudioPlayer::fail(const char* reason) {
     status_ = AudioStatus::Failed;
     count_ = 0;
     awaitingStatus_ = false;
-    errorEvent_ = true;
     log_.log(reason);
-}
-
-bool YX5200AudioPlayer::takeError() {
-    const bool event = errorEvent_;
-    errorEvent_ = false;
-    return event;
 }
 
 bool YX5200AudioPlayer::begin() {
@@ -57,8 +50,6 @@ bool YX5200AudioPlayer::begin() {
     initStep_ = 0;
     awaitingStatus_ = false;
     pollingEnabled_ = true;
-    errorEvent_ = false;
-    lastTrack_ = 0;
     uartStarted_ = false;
     parser_.reset();
     startedAt_ = lastSent_ = lastByte_ = clock_.now();
@@ -79,8 +70,6 @@ bool YX5200AudioPlayer::send(uint8_t command, uint16_t parameter) {
         return false;
     }
     lastSent_ = clock_.now();
-    if (command == 0x12) lastTrack_ = parameter;
-    if (command == 0x16) lastTrack_ = 0;
     return true;
 }
 
@@ -98,9 +87,7 @@ bool YX5200AudioPlayer::stop() {
     count_ = 0;
     awaitingStatus_ = false;
     if (!uartStarted_ || (status_ != AudioStatus::Ready && status_ != AudioStatus::Failed)) return false;
-    const bool retry = status_ == AudioStatus::Ready;
-    if (!send(0x16)) return false;
-    return !retry || enqueue(0x16);
+    return send(0x16);
 }
 bool YX5200AudioPlayer::pause() { return enqueue(0x0e); }
 bool YX5200AudioPlayer::resume() { return enqueue(0x0d); }
@@ -116,7 +103,6 @@ void YX5200AudioPlayer::receive(const Mp3Frame& frame) {
         std::snprintf(message, sizeof(message), "[ERROR] YX5200 module error %u", frame.parameter);
         if (status_ == AudioStatus::Ready && (frame.parameter == 5 || frame.parameter == 6)) {
             count_ = 0;
-            errorEvent_ = lastTrack_ != Config::ErrorTrack;
             log_.log(message);
         } else fail(message);
     } else if (frame.command == 0x3b && (frame.parameter & 2)) {

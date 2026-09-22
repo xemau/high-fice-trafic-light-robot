@@ -2,7 +2,7 @@
 
 PlatformIO / Arduino / C++17 firmware for the existing **ESP32-WROOM-32D development board** and **six four-leg common-anode RGB LEDs, wired as three pairs: top, middle and bottom**. The robot displays red for 3 seconds, yellow for 1 second, then waits on green for a debounced high-five. A high-five randomly selects one of `/MP3/0001.mp3` through `/MP3/0003.mp3` and starts a unique full-spectrum RGB fade. At 26 seconds the animation changes to the middle yellow pair; at 30 seconds audio stops and the robot returns to red.
 
-The automatic red phase remains 3 seconds, below the 5-second maximum. The 30-second reward timer starts when the high-five triggers the reward, not when audible playback begins. The yellow warning starts at 26 seconds. At the deadline, firmware immediately sends stop, schedules one paced stop retry, and shows red. After another 3-second red and 1-second yellow phase, green waits indefinitely for a new button press. Track selection uses button timing to vary the pseudo-random sequence and avoids playing the same reward track twice consecutively. This is a reward-phase limit, not a universal audio timeout: manual AUDIO TEST playback and boot/error sounds have no added 30-second cutoff.
+The automatic red phase remains 3 seconds, below the 5-second maximum. The 30-second reward timer starts when the high-five triggers the reward, not when audible playback begins. The yellow warning starts at 26 seconds. At the deadline, firmware immediately sends one stop command and shows red. After another 3-second red and 1-second yellow phase, green waits indefinitely for a new button press. Hardware entropy and button timing vary the pseudo-random track sequence, which avoids playing the same reward track twice consecutively. Firmware plays no boot or failure sound; only reward tracks 1–3 are selected automatically.
 
 The reward animation continuously fades between seeded, randomized HSV colors. Targets take 2–3.5 seconds to reach, with gamma-corrected brightness updates every 20 ms; no deliberate black frame or sudden strobe is part of the dance. Hardware PWM runs at 5 kHz, while the visible color motion remains below one transition per second. The ESP32 seeds the generator at boot and every animation mixes in its start time and evolving random state, so successive rewards do not repeat a fixed sequence. This reduced-flash design uses the W3C limit of no more than three flashes per second as a conservative reference, but it cannot guarantee that every person will tolerate the effect. Brightness, contrast, viewing distance and individual sensitivity still matter. See [W3C G19](https://www.w3.org/WAI/WCAG22/Techniques/general/G19) and the [Epilepsy Foundation photosensitivity guidance](https://www.epilepsy.com/what-is-epilepsy/seizure-triggers/photosensitivity).
 
@@ -10,7 +10,7 @@ The ESP32 controls a **YX5200 Mini MP3 module** over UART2; the YX5200 decodes t
 
 ## Status and verification
 
-The ESP32 firmware builds, and 48 native tests pass across six suites, plus 12 host tests for SD preparation, audio conversion and PWM output. A clean Apple Clang coverage run measured **100% core line coverage and 96.3% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
+The ESP32 firmware builds, and 48 native tests pass across six suites, plus 12 host tests for SD preparation, audio conversion and PWM output. A clean Apple Clang coverage run measured **100% core line coverage and 96.0% branch coverage**. Reproduce these results with the commands below; generated reports are ignored by Git.
 
 Physical commissioning is still required: no ESP32 USB device was available during implementation. Tests verify application behavior and protocol handling, not actual sound, wiring, switch mechanics, supply stability, or this particular YX5200 module's compatibility. Follow the staged bring-up checklist before installing the electronics in cardboard.
 
@@ -169,21 +169,13 @@ Replace the port with the actual USB UART device (`/dev/ttyUSB0` is a common Lin
 
 The dependencies are pinned in `platformio.ini`: Espressif32 6.10.0 and Arduino ESP32 2.0.17 via that platform. LEDs use Arduino GPIO output directly, with no LED library dependency. PlatformIO stores tools locally in `.pio-core/` and builds in `.pio/`. Firmware binaries are under `.pio/build/esp32dev/`. No hardware upload occurs when running native tests.
 
-Open the monitor and press EN/reset to see the boot menu. Send a number **followed by Enter** within 5 seconds. Use a serial terminal that sends LF or CRLF; both are supported. Without a completed selection, the firmware starts FULL automatically and does not wait for a serial connection. With PlatformIO monitor, `--filter send_on_enter` is useful for line editing. Exit the monitor with Ctrl+C before uploading.
+The uploaded firmware starts FULL immediately after reset; there is no boot menu or selectable hardware-test mode. A serial connection is optional. With PlatformIO monitor, `--filter send_on_enter` is useful for line editing. Exit the monitor with Ctrl+C before uploading.
 
-## Diagnostic modes
+## Production mode and serial controls
 
-Reboot to select a different mode. A digit sent after selection is rejected; modes do not silently change during operation. Commands are lowercase, one per line, up to 63 characters. Oversized or non-text lines are discarded in full, with one error; backspace and CRLF work. `help` and `status` work in every active mode.
+FULL initializes the sensor, LEDs and UART2 audio driver and immediately starts the red → yellow → green sequence. Internal diagnostic controllers remain covered by automated tests, but the production entry point never exposes their mode selector.
 
-| Selection | Mode | Initialized hardware | Operation and commands |
-| --- | --- | --- | --- |
-| `1` | FULL | Sensor, LEDs, UART2 | Automatic red → yellow → green → high-five → animation → yellow warning → red |
-| `2` | LIGHTS TEST | LEDs only | Automatically cycles red, yellow, green, off every second. `red`, `yellow`, `green`, `off` hold a lamp. `cycle` restarts cycling. `dance` runs the seeded full-spectrum fade; both LEDs in each pair match |
-| `3` | AUDIO TEST | UART2 only | `play 1`, `play 2`, `boot`, `error`, `stop`, `pause`, `resume`, `volume 15`, `volume 20`, `next`, `previous`, `retry` |
-| `4` | SENSOR TEST | GPIO27 only | Prints stable PRESSED/RELEASED transitions and a HIGH FIVE EVENT once per debounced press; no per-loop spam |
-| `5` | SEQUENCE TEST | None of the physical sensor/LED/audio devices | Runs the real RobotController with virtual hardware. Send `highfive` at green; inspect state and simulated audio logs |
-
-FULL and SEQUENCE also accept `status`, `play <track>`, `volume <0-30>`, `lights red`, `lights yellow`, `lights green`, `lights off`, `simulate highfive`, `reset`, and `help`, plus the audio controls above. Manual lamp commands persist until the next state transition; they do not change the state machine. `reset` stops pending reward playback and returns to red. In sequence mode, audio acceptance and lamp operations are simulated.
+Optional serial commands are lowercase, one per line: `status`, `help`, `play <1-9999>`, `stop`, `pause`, `resume`, `volume <0-30>`, `next`, `previous`, `retry`, `lights red`, `lights yellow`, `lights green`, `lights off`, `simulate highfive`, and `reset`. There are no `boot` or `error` sound commands. Manual lamp commands persist until the next state transition; they do not change the state machine. `reset` stops pending reward playback and returns to red.
 
 Boot-held switches are displayed as pressed but generate no high-five until released and pressed again. A press during red/yellow/reward is consumed and ignored by the state machine. A switch held into green cannot trigger a later reward automatically. Mount the switch inside the hand/arm so a high-five moves the hand enough to actuate it, without transferring the full impact into the switch or exposed wires.
 
@@ -191,9 +183,9 @@ Boot-held switches are displayed as pressed but generate no high-five until rele
 
 `begin()` starts asynchronous initialization, not a blocking success check. After a 3-second module settling period, the driver sends stop, select TF/SD, configured volume, DAC enable, the configured YX5200 equalizer preset, and a volume query, at least 200 ms apart. `[OK] YX5200` requires a valid checksummed volume reply matching the configured startup volume. The EQ command is requested but not verified by that handshake. A reply timeout produces `[ERROR] YX5200 initialization failed`; UART failure, SD removal, and explicit module errors are also logged. FULL continues processing LEDs, sensor, timing, and diagnostics if audio fails.
 
-Runtime commands go into a fixed eight-entry queue and return success **only for acceptance**, not audible playback. Invalid volumes/tracks, failed/not-ready audio, and queue overflow return failure. Commands do not wait for ACKs. The driver parses error/finish notifications and attempts an optional status poll every 5 seconds. Some YX5200 variants do not answer status command `0x42`; after the first 1.5-second timeout, firmware logs one warning and disables further runtime polling while keeping the initialized audio link ready. Missing-file/out-of-range replies (module errors 5/6) after initialization keep the link usable and raise a one-shot error event; other explicit module errors fail the driver. `status` reports cached driver health; there is no claim that the speaker is connected or that a file exists. Repair wiring/card issues and send `retry` to restart initialization. Commands received before audio is ready are rejected rather than replayed unexpectedly later. Stop discards pending playback and takes priority over health polling at the next permitted transmit slot.
+Runtime commands go into a fixed eight-entry queue and return success **only for acceptance**, not audible playback. Invalid volumes/tracks, failed/not-ready audio, and queue overflow return failure. Commands do not wait for ACKs. The driver parses error/finish notifications and attempts an optional status poll every 5 seconds. Some YX5200 variants do not answer status command `0x42`; after the first 1.5-second timeout, firmware logs one warning and disables further runtime polling while keeping the initialized audio link ready. Missing-file/out-of-range replies (module errors 5/6) after initialization keep the link usable; other explicit module errors fail the driver. `status` reports cached driver health; there is no claim that the speaker is connected or that a file exists. Repair wiring/card issues and send `retry` to restart initialization. Commands received before audio is ready are rejected rather than replayed unexpectedly later. Stop discards pending playback, cancels a pending health response, and transmits immediately.
 
-FULL plays the boot sound once after audio becomes ready. A late startup never interrupts an active reward. Failed LED/sensor initialization, recoverable missing-track errors, and rejected diagnostic commands request the error sound when audio is available. AUDIO TEST accepts `boot` and `error` explicitly but does not play a boot cue automatically. An absent/broken MP3 module cannot emit an error sound; Serial remains the fallback. Failure to find the error cue itself is logged without recursively requesting it.
+Initialization failures, missing tracks, module errors and rejected serial commands are logged only. They never select another audio track, so a high-five cannot be followed by a boot or failure cue.
 
 ## SD-card layout and YX5200 compatibility
 
@@ -201,38 +193,32 @@ Use a FAT32 microSD card up to 32 GB with an MBR partition table. Run the import
 
 ```sh
 python scripts/prepare_sd.py --output /Volumes/ROBOT \
-  --boot /path/to/boot.mp3 --error /path/to/error.mp3 \
   --music '/path/to/My favourite song.wav' /path/to/more-music/
 ```
 
 The importer accepts MP3, WAV, FLAC, M4A, OGG, WMA and other sources supported by the installed FFmpeg decoder. It converts them to metadata-free 44.1 kHz stereo, 128 kbps CBR MP3, checks that each output decodes, assigns IDs, and verifies copied hashes. It does not claim support for every possible codec, encrypted/DRM audio, or corrupt files. Unsupported sources fail before the destination is modified. It does not format disks.
 
-The YX5200 still requires numeric addressing for deterministic playback; it cannot open `/system/boot.mp3` by pathname through UART. The importer handles that hardware constraint, retaining original system files under `/system` and creating playback copies automatically:
+The YX5200 requires numeric addressing for deterministic playback. The importer creates only numbered reward tracks:
 
 ```text
 SD root/
-├── system/
-│   ├── boot.mp3       # original supplied file
-│   └── error.mp3      # original supplied file
 ├── MP3/
 │   ├── 0001.mp3       # first imported music file: high-five reward
-│   ├── ...
-│   ├── 2998.mp3       # prepared boot sound
-│   └── 2999.mp3       # prepared error sound
+│   └── ...
 └── audio-manifest.json # original names, IDs, file sizes and SHA-256 hashes
 ```
 
-`play 1` uses command **0x12 (MP3-folder addressing)** for `/MP3/0001.mp3`, not FAT copy-order track selection. Config.h reserves tracks 2998/2999 for boot/error and leaves 1–2997 for imported music. Explicit input order determines music IDs; folders are scanned in sorted path order. The first music file is the reward. `next`/`previous` use native card enumeration, which can include the original system copies and is not guaranteed to follow numeric ordering. Use `play N`, `boot`, or `error` for deterministic selection. The importer removes AppleDouble `._` metadata sidecars for generated files after copying. macOS can recreate them while the volume is mounted; safely eject the card after preparation.
+`play 1` uses command **0x12 (MP3-folder addressing)** for `/MP3/0001.mp3`, not FAT copy-order track selection. Explicit input order determines music IDs; folders are scanned in sorted path order. The first music file is the first reward track. `next`/`previous` use native card enumeration and are not guaranteed to follow numeric ordering. Use `play N` for deterministic selection. The importer removes AppleDouble `._` metadata sidecars for generated files after copying. macOS can recreate them while the volume is mounted; safely eject the card after preparation.
 
 To update an already prepared card, repeat the import command with `--replace` and the **entire desired music collection**. Replacement verifies the existing manifest and hashes, preserves unrelated files, refuses collisions with unowned files, and removes obsolete generated tracks. Keep the card attached until verification completes; conversion occurs first, but copying multiple files is not a filesystem transaction. Retain source audio on the laptop so an interrupted write can be rebuilt. Do not drag arbitrary audio directly into MP3 and expect format conversion or ID assignment to happen on the module.
 
 The current card contains three randomized reward tracks: Pufino's “Rock Me Now” as track 1, Aetheric's “Snap Crackle” as track 2, and Moavii's “Root” as track 3. The original sources remain on the laptop. The 30-second reward limit is enforced by firmware, so changing that duration does not require trimming or recopying the audio. See [the SD preparation record](docs/sd-card-preparation.md) for the prepared files and hashes.
 
-The driver directly implements the YX5200/DFPlayer-compatible 10-byte protocol at 9600 baud, 8N1. DFRobot documentation is used as a **protocol reference**, not as a requirement to replace the existing YX5200. Module variants can differ; AUDIO TEST verifies the actual module. The checksum is the 16-bit two's complement of bytes 1–6 (version through parameter-low). For volume 15, the frame is `7E FF 06 06 00 00 0F FE E6 EF`. Some older manual examples contain inconsistent checksums; this implementation follows the algorithm and tests complete frames and corrupted/fragmented replies.
+The driver directly implements the YX5200/DFPlayer-compatible 10-byte protocol at 9600 baud, 8N1. DFRobot documentation is used as a **protocol reference**, not as a requirement to replace the existing YX5200. Module variants can differ; use the FULL-mode `play N` and `status` commands to verify the actual module. The checksum is the 16-bit two's complement of bytes 1–6 (version through parameter-low). For volume 15, the frame is `7E FF 06 06 00 00 0F FE E6 EF`. Some older manual examples contain inconsistent checksums; this implementation follows the algorithm and tests complete frames and corrupted/fragmented replies.
 
 ## Configuration and architecture
 
-All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB GPIOs, sensor/UART GPIOs, UART number/baud, serial baud, animation/cycle timings, state durations, debounce, reward track, volume, YX5200 equalizer preset, boot selection, UART pacing/timeouts/queue capacity, and serial buffer limits.
+All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB GPIOs, sensor/UART GPIOs, UART number/baud, serial baud, animation timings, state durations, debounce, reward tracks, volume, YX5200 equalizer preset, UART pacing/timeouts/queue capacity, and serial buffer limits.
 
 | Setting | Default |
 | --- | --- |
@@ -246,20 +232,13 @@ All tunable defaults are in [`include/Config.h`](include/Config.h): the nine RGB
 | Red / yellow / reward warning / reward end | 3000 / 1000 / 26000 / 30000 ms |
 | Green | Wait indefinitely |
 | Debounce | 30 ms |
-| Reward tracks / boot / error track | 1–3 (random, no immediate repeat) / 2998 / 2999 |
+| Reward tracks | 1–3 (random, no immediate repeat) |
 | Initial volume | 30 (supported volume range 0–30) |
 | YX5200 equalizer | Jazz / 3 (Normal=0, Pop=1, Rock=2, Jazz=3, Classic=4, Bass=5) |
-| Boot selection timeout / default | 5000 ms / FULL |
 
 To remap the LEDs, edit `Config::Pins::LedRgb`: rows are top/middle/bottom pairs and columns are R/G/B. Compile-time checks reject duplicate pins, sensor/UART conflicts and pins outside the safe output list. RobotController needs no changes. The nine channels use the ESP32 LEDC peripheral for independent active-low PWM and software gamma correction; resistor values still affect current and color balance. Initialization drives all channels HIGH (off) before attaching PWM. Recommended external pull-ups keep them off before initialization.
 
-To compile with another default mode, change the `DEFAULT_APP_MODE` fallback in Config.h or extend the ESP32 build flags in `platformio.ini`:
-
-```ini
-build_flags = ${env.build_flags} -DDEFAULT_APP_MODE=2
-```
-
-Modes are numbered 1–5 as in the menu. A serial selection still overrides the compile-time default. Do not use ESP32 flash-connected GPIO6–11 or change to boot-strapping pins without checking the carrier/module documentation.
+The production entry point always starts FULL. Do not use ESP32 flash-connected GPIO6–11 or change to boot-strapping pins without checking the carrier/module documentation.
 
 ```text
 include/interfaces/     Clock, sensor, audio, traffic light, logger, and electrical IO contracts
@@ -291,7 +270,7 @@ python -m unittest discover -s test_host -v
 
 On Linux, the script uses GCC's `gcov`; on macOS it uses Apple Clang and `xcrun llvm-cov gcov`. If using a different compiler version, set `GCOV` to the matching coverage executable, e.g. `GCOV=gcov-14 python scripts/coverage.py`. Compiler versions can produce slightly different branch totals. Do not merge counters from different source versions or compilers; the script cleans them first.
 
-The tests cover state transitions, −1/exact/+1 timing boundaries and rollover; randomized reward-track bounds and repeat avoidance; early/held/repeated high-fives; actual debounce bounce sequences; RGB pair selection, the final yellow warning, seeded repeatability, successive animation variation, smooth fade deltas, full-spectrum targets, animation cancellation and restart; fixed UART frames, fragmented/corrupt input, bounded RX, command pacing/queue overflow, initialization failures, optional status-poll fallback, volume limits, stop delivery and a second reward playback without runtime status replies; malformed serial input, boot defaults, and strict mode isolation. An integration test runs the real controller, diagnostics, sensor, RGB pair frames and audio driver together through fake electrical IO.
+The tests cover state transitions, −1/exact/+1 timing boundaries and rollover; randomized reward-track bounds and repeat avoidance; early/held/repeated high-fives; actual debounce bounce sequences; RGB pair selection, the final yellow warning, seeded repeatability, successive animation variation, smooth fade deltas, full-spectrum targets, animation cancellation and restart; fixed UART frames, fragmented/corrupt input, bounded RX, command pacing/queue overflow, initialization failures, optional status-poll fallback, volume limits, stop delivery, a second reward playback without runtime status replies, and the absence of system-sound commands and cues. An integration test runs the real controller, diagnostics, sensor, RGB pair frames and audio driver together through fake electrical IO.
 
 GitHub Actions runs native tests/coverage and host importer/conversion tests on Linux and macOS and builds the ESP32 firmware on Linux for pushes and pull requests. It publishes coverage reports and firmware binaries as workflow artifacts. A host test compiles the production GPIO adapter against a recording Arduino stub and checks PWM initialization, active-low polarity, pin/channel mapping, gamma correction and setup failure; it does not measure real electrical behavior. The importer tests include real WAV, MP3, FLAC and M4A conversion, arbitrary/Unicode filenames, read-back hashes, corrupt input, and safe library replacement.
 
@@ -300,13 +279,12 @@ GitHub Actions runs native tests/coverage and host importer/conversion tests on 
 Make connections with power off. Use one stage at a time; a missing MP3 module must not prevent sensor or light tests. Do not connect the whole robot just to test one component.
 
 1. **Set LM2596 to 5.0 V.** Leave the ESP32, MP3 and LEDs disconnected. Apply the 12 V supply, verify jack polarity, set/measure buck output, then turn power off. Check the output again under load later.
-2. **Power ESP32 only.** Use USB with the external feed isolated as described above. Build/upload, open 115200-baud monitor, reset, verify the menu and boot timeout. Resolve USB/external power isolation before live externally powered tests.
-3. **SENSOR TEST (`4`).** With power off, wire DB1 COM/1 → GND and NO/4 → GPIO27; leave NC/2 disconnected. No switch power wire is needed. Verify RELEASED → PRESSED + exactly one HIGH FIVE EVENT → RELEASED. Hold it for several seconds: no repeated events. Test repeated presses and the mounted hand; tune debounce only if needed.
-4. **LIGHTS TEST (`2`).** First verify each LED's common-anode/R/G/B pinout. Connect all six common anodes to 3V3, and each color cathode through its own 470 Ω resistor to the GPIO in the pair table (18 series resistors total). Add the nine GPIO pull-ups. Check top red, middle mixed yellow, bottom green, off and cycle. With `dance`, verify slow, continuous full-spectrum fades with no visible PWM flicker, abrupt black frames or fixed repeating sequence; both LEDs in each pair must match. Measure currents and check mixed-yellow visibility, blue/green brightness, and off behavior during reset. Sensor/MP3 are not required; use USB-only ESP32 power with the external feed isolated.
-5. **YX5200 AUDIO TEST (`3`).** Insert the prepared card while unpowered; connect 5V/GND/UART. Leave amplifier/speaker disconnected initially. Wait for verified `[OK] YX5200`, then try `play 1`, `pause`, `resume`, `stop`, `volume 12`, and `status`. UART success alone does not establish audible output.
-6. **PAM8610 and speaker.** Power off, add resistor-summed DAC line audio to the left input and speaker across L+/L−. Power the amplifier from switched 12 V. Start its gain low. Repeat AUDIO TEST, listen for clean sound, and measure 5 V/12 V under playback load. Check for hot components or reset/brownout behavior. Never rewire speaker outputs while energized.
-7. **SEQUENCE TEST (`5`).** Verify red (3 s), yellow (1 s), green (indefinite), then `highfive` → reward animation → yellow at 26 s → stop and red at 30 s. Confirm the next green waits for a new press. This mode requires no physical peripheral and does not play actual audio or drive LEDs.
-8. **FULL (`1`).** Connect the tested components and use the physical hand. Verify music and dance start once on green, presses during red/yellow do not queue a reward, a held switch never retriggers, and a new press works on the next cycle. Disconnect/fix audio with power off and repeat to verify diagnostics and recovery. Test normal operation without a serial monitor.
+2. **Power ESP32 only.** Use USB with the external feed isolated as described above. Build/upload, open the 115200-baud monitor, reset and verify that FULL starts immediately. Resolve USB/external power isolation before live externally powered tests.
+3. **Sensor.** With power off, wire DB1 COM/1 → GND and NO/4 → GPIO27; leave NC/2 disconnected. No switch power wire is needed. In FULL, verify that a press on green produces exactly one HIGH FIVE log and reward. Hold it for several seconds: no repeated events. Test release and a second press.
+4. **Lights.** First verify each LED's common-anode/R/G/B pinout. Connect all six common anodes to 3V3, and each color cathode through its own 470 Ω resistor to the GPIO in the pair table (18 series resistors total). Add the nine GPIO pull-ups. Use `lights red`, `lights yellow`, `lights green` and `lights off` to verify pair mapping. Trigger a reward to verify slow, continuous full-spectrum fades with no visible PWM flicker or abrupt black frames. Measure currents and check mixed-yellow visibility, blue/green brightness, and off behavior during reset.
+5. **YX5200 audio.** Insert the prepared card while unpowered; connect 5V/GND/UART. Leave amplifier/speaker disconnected initially. Wait for verified `[OK] YX5200`, then try `play 1`, `pause`, `resume`, `stop`, `volume 12`, and `status`. UART success alone does not establish audible output.
+6. **PAM8610 and speaker.** Power off, add resistor-summed DAC line audio to the left input and speaker across L+/L−. Power the amplifier from switched 12 V. Start its gain low. Repeat playback, listen for clean sound, and measure 5 V/12 V under load. Check for hot components or reset/brownout behavior. Never rewire speaker outputs while energized.
+7. **Complete sequence.** Verify red (3 s), yellow (1 s), green (indefinite), high-five → reward animation → yellow at 26 s → stop and red at 30 s. Confirm the next green waits for a release and new press, plays another reward, and never plays a boot or failure cue. Test normal operation without a serial monitor.
 
 Record results, module markings/carrier model, measured voltage under load, and any configuration changes in [`docs/hardware-validation.md`](docs/hardware-validation.md). Do not mark electrical/audio checks passed based on unit tests.
 
@@ -315,15 +293,15 @@ Record results, module markings/carrier model, measured voltage under load, and 
 | Symptom | Check |
 | --- | --- |
 | ESP32 will not boot/upload | USB data cable and correct port; stable 5 V/3.3 V; common ground; carrier 5V versus 3V3 labels; no 12 V exposure; BOOT/EN procedure; no added loads on flash/strapping pins. Disconnect peripherals to isolate the fault |
-| YX5200 not responding | AUDIO TEST; GPIO17 TX → module RX and GPIO16 RX ← module TX; module power/ground and 3.3 V UART levels; 9600 8N1; valid card; wait for initialization; inspect timeout/error log, then `retry`. Clones may require longer startup/command timings or have protocol differences |
+| YX5200 not responding | In FULL, inspect `status`; check GPIO17 TX → module RX and GPIO16 RX ← module TX, module power/ground, 3.3 V UART levels, 9600 8N1 and the card; then send `retry`. Clones may require longer startup/command timings or have protocol differences |
 | No speaker audio | A queued command is not proof of playback. Verify `/MP3/0001.mp3`, valid MP3, volume, amplifier 12 V supply/gain/mute state, DAC_L/R resistor sum to line input, input ground, and speaker across one channel's +/−. Leave SPK outputs unused |
 | Audio distortion | Lower MP3 volume and amplifier gain, check clipped source audio, resistor sum, supply sag, loose connections and board temperature. Do not expect clean continuous 15 W from the marketing label |
-| LED stays dark | LIGHTS TEST; common anode to 3V3, correct R/G/B cathode and individual resistor to GPIO. LOW lights the channel. Check forward voltage/headroom and both separate branches; never bypass a resistor or connect the LED common anode to 5 V in this circuit |
+| LED stays dark | Use the FULL-mode `lights` commands; check common anode to 3V3, correct R/G/B cathode and individual resistor to GPIO. LOW lights the channel. Check forward voltage/headroom and both separate branches; never bypass a resistor or connect the LED common anode to 5 V in this circuit |
 | Wrong pair/color lights | Compare all nine R/G/B connections with the pair table and Config::Pins::LedRgb. Middle yellow requires both red and green, with blue off. Correct leg mapping before adjusting resistor balance; both LEDs in each pair should match |
 | Endstop always pressed/released | Check DB1 COM/1 → GND and NO/4 → GPIO27, with NC/2 unused and no switch power wire. Test contacts with power off; verify released HIGH/pressed LOW when powered. A disconnected input reads released through the pull-up. Using NC reverses the expected behavior |
 | ESP32 resets when audio gets loud | Measure 12 V and 5 V under load; inspect wire/connector resistance, ground distribution, buck thermal/current limits, amplifier gain and short circuits. Keep amplifier current off breadboards and ESP32 supply wiring |
-| Sensor or LEDs work but audio reports failure | Expected isolation: use the individual modes, repair audio, then `retry`. A sensor/LED initialization log verifies software setup, not external wiring |
-| Commands do nothing | Finish boot selection with Enter before timeout; check mode, lowercase syntax and `help`. Wait for audio ready. Reboot to change modes. Watch queue/full/input-overflow errors |
+| Sensor or LEDs work but audio reports failure | Repair audio, then send `retry`. A sensor/LED initialization log verifies software setup, not external wiring |
+| Commands do nothing | Check lowercase syntax and `help`, wait for audio ready, and inspect queue/full/input-overflow logs. Production firmware always remains in FULL |
 
 ## References
 

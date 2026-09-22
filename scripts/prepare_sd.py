@@ -19,15 +19,13 @@ EXTENSIONS = {".mp3", ".wav", ".wma", ".flac", ".aac", ".m4a", ".ogg", ".opus",
 def read_layout(config=ROOT / "include/Config.h"):
     text = config.read_text(encoding="utf-8")
     layout = {}
-    for name in ("RewardTrack", "BootTrack", "ErrorTrack", "MaxTrack"):
+    for name in ("RewardTrack", "MaxTrack"):
         match = re.search(r"constexpr\s+(?:uint16_t|int)\s+" + name + r"\s*=\s*(\d+)\s*;", text)
         if not match:
             raise ValueError(f"Config::{name} must be a decimal integer literal for SD preparation")
         layout[name] = int(match[1])
-    if not (0 < layout["RewardTrack"] < min(layout["BootTrack"], layout["ErrorTrack"]) and
-            layout["BootTrack"] != layout["ErrorTrack"] and
-            max(layout["BootTrack"], layout["ErrorTrack"]) <= layout["MaxTrack"]):
-        raise ValueError("Invalid or overlapping music/system track IDs in Config.h")
+    if not 0 < layout["RewardTrack"] <= layout["MaxTrack"]:
+        raise ValueError("Invalid reward track range in Config.h")
     return layout
 
 
@@ -102,7 +100,8 @@ def existing_files(output, replace):
         return set()
     if not replace:
         raise ValueError(f"Destination already contains {present[0]}; use --replace for a previously prepared library")
-    if set(present) != {"MP3", "system", MANIFEST} or any((output / name).is_symlink() for name in present):
+    if set(present) not in ({"MP3", MANIFEST}, {"MP3", "system", MANIFEST}) or \
+            any((output / name).is_symlink() for name in present):
         raise ValueError("Cannot replace a library without its complete, original manifest and directories")
     manifest = json.loads((output / MANIFEST).read_text(encoding="utf-8"))
     if manifest.get("format_version") != 1 or not isinstance(manifest.get("files"), list):
@@ -125,7 +124,7 @@ def clean_metadata(output, names):
             sidecar.unlink()
 
 
-def prepare(output, boot, error, music=(), ffmpeg=None, convert_fn=convert, replace=False):
+def prepare(output, music=(), ffmpeg=None, convert_fn=convert, replace=False):
     output = Path(output).expanduser().absolute()
     if output.is_symlink():
         raise ValueError("Output cannot be a symbolic link")
@@ -134,34 +133,26 @@ def prepare(output, boot, error, music=(), ffmpeg=None, convert_fn=convert, repl
         raise ValueError("Output must be a dedicated SD volume or staging folder")
     layout = read_layout()
     sources = collect_music(music)
-    limit = min(layout["BootTrack"], layout["ErrorTrack"])
-    if layout["RewardTrack"] + len(sources) > limit:
-        raise ValueError("Music files would overlap reserved system tracks")
-    boot, error = Path(boot).expanduser().resolve(strict=True), Path(error).expanduser().resolve(strict=True)
-    if not boot.is_file() or not error.is_file():
-        raise ValueError("Boot and error sources must be regular files")
+    if layout["RewardTrack"] + len(sources) - 1 > layout["MaxTrack"]:
+        raise ValueError("Music files exceed the supported track range")
     previous = existing_files(output, replace)
     if output.exists() and not output.is_dir():
         raise ValueError("Output must be a directory")
-    for source in [boot, error, *sources]:
+    for source in sources:
         if source == output or output in source.parents:
             raise ValueError("Keep original audio outside the destination volume/folder")
     ffmpeg = ffmpeg or ffmpeg_executable()
     with tempfile.TemporaryDirectory(prefix="robot-audio-") as temporary:
         staged = Path(temporary)
         (staged / "MP3").mkdir()
-        (staged / "system").mkdir()
         manifest = {"format_version": 1, "encoding": "MP3 CBR 128 kbps, 44100 Hz, stereo",
                     "tracks": [], "files": []}
         jobs = [("music", layout["RewardTrack"] + i, source) for i, source in enumerate(sources)]
-        jobs += [("boot", layout["BootTrack"], boot), ("error", layout["ErrorTrack"], error)]
         for role, track, source in jobs:
             relative = f"MP3/{track:04d}.mp3"
             convert_fn(source, staged / relative, ffmpeg)
             manifest["tracks"].append({"role": role, "track": track, "source_name": source.name,
                                        "playback_file": relative})
-            if role != "music":
-                shutil.copyfile(source, staged / "system" / f"{role}{source.suffix.lower()}")
         for path in sorted(staged.rglob("*")):
             if path.is_file():
                 manifest["files"].append({"path": path.relative_to(staged).as_posix(),
@@ -180,6 +171,9 @@ def prepare(output, boot, error, music=(), ffmpeg=None, convert_fn=convert, repl
             shutil.copyfile(staged / name, destination)
         for name in previous - current:
             (output / name).unlink()
+        legacy_system = output / "system"
+        if legacy_system.is_dir() and not any(legacy_system.iterdir()):
+            legacy_system.rmdir()
         shutil.copyfile(staged / MANIFEST, output / MANIFEST)
         clean_metadata(output, previous | current | {MANIFEST})
         verify(output, manifest)
@@ -189,19 +183,17 @@ def prepare(output, boot, error, music=(), ffmpeg=None, convert_fn=convert, repl
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True, help="Fresh SD volume or staging directory (never formatted by this script)")
-    parser.add_argument("--boot", type=Path, required=True)
-    parser.add_argument("--error", type=Path, required=True)
     parser.add_argument("--music", type=Path, nargs="*", default=[], help="Arbitrarily named audio files or folders; first imported track is the reward")
     parser.add_argument("--replace", action="store_true", help="Replace only files owned by a verified previous audio manifest; supply the entire desired music collection")
     args = parser.parse_args()
     try:
-        manifest = prepare(args.output, args.boot, args.error, args.music, replace=args.replace)
+        manifest = prepare(args.output, args.music, replace=args.replace)
     except (OSError, ValueError) as exc:
         parser.exit(1, f"Error: {exc}\n")
     for track in manifest["tracks"]:
         print(f"{track['role']:5s} {track['track']:4d}: {track['source_name']} -> {track['playback_file']}")
     if not args.music:
-        print("No reward music supplied; system sounds only. Import music before testing a high-five reward.")
+        print("No reward music supplied. Import music before testing a high-five reward.")
     print(f"Verified {len(manifest['files'])} files in {args.output}")
 
 

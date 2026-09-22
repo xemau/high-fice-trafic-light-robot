@@ -19,20 +19,16 @@ void DiagnosticController::begin(AppMode mode) {
         case AppMode::SequenceTest: name = "SEQUENCE TEST (virtual hardware)"; break;
         default: mode_ = AppMode::Full; break;
     }
-    bootPending_ = mode_ == AppMode::Full;
-    errorPending_ = false;
     char message[64];
     std::snprintf(message, sizeof(message), "[MODE] %s", name);
     log_.log(message);
     if (lightsMode()) {
         const bool ok = lights().begin();
         log_.log(ok ? "[OK] LEDs (driver initialized)" : "[ERROR] LEDs initialization failed");
-        errorPending_ = !ok;
     }
     if (robotMode() || mode_ == AppMode::SensorTest) {
         const bool ok = sensor().begin();
         log_.log(ok ? "[OK] sensor" : "[ERROR] sensor initialization failed");
-        errorPending_ = errorPending_ || !ok;
         wasPressed_ = sensor().pressed();
     }
     if (audioMode() && !audio().begin()) log_.log("[ERROR] audio initialization failed");
@@ -72,40 +68,13 @@ void DiagnosticController::update() {
         }
         if (sensor_.takePress()) log_.log("[SENSOR] HIGH FIVE EVENT");
     }
-    if (audioMode()) updateSounds();
-}
-
-void DiagnosticController::signalError() {
-    if (audioMode() && audio().status() == AudioStatus::Ready) {
-        if (!audio().playTrack(Config::ErrorTrack)) log_.log("[ERROR] error sound unavailable");
-    }
-}
-
-void DiagnosticController::updateSounds() {
-    if (audio().takeError()) errorPending_ = true;
-    if (audio().status() == AudioStatus::Failed) {
-        bootPending_ = errorPending_ = false;
-        return;
-    }
-    if (audio().status() != AudioStatus::Ready) return;
-    if (errorPending_) {
-        signalError();
-        bootPending_ = errorPending_ = false;
-    } else if (bootPending_) {
-        bootPending_ = false;
-        // A late audio startup must not interrupt an already-started reward.
-        if (robotState() != RobotState::Reward) {
-            if (!audio().playTrack(Config::BootTrack)) log_.log("[ERROR] boot sound unavailable");
-        }
-    }
 }
 
 void DiagnosticController::help() {
-    log_.log("[HELP] status | help; reboot to select another mode");
+    log_.log("[HELP] status | help; production firmware always runs FULL");
     if (lightsMode()) log_.log("[HELP] red | yellow | green | off | lights <color>");
     if (mode_ == AppMode::LightsTest) log_.log("[HELP] cycle | dance");
     if (audioMode()) log_.log("[HELP] play <1-9999> | stop | pause | resume | volume <0-30> | next | previous | retry");
-    if (audioMode()) log_.log("[HELP] boot | error (system sound tests)");
     if (robotMode()) log_.log("[HELP] highfive | simulate highfive | reset");
 }
 
@@ -170,8 +139,6 @@ void DiagnosticController::command(Command cmd) {
             case CommandType::Next: ok = audio().next(); break;
             case CommandType::Previous: ok = audio().previous(); break;
             case CommandType::Retry: ok = audio().begin(); break;
-            case CommandType::BootSound: ok = audio().playTrack(Config::BootTrack); break;
-            case CommandType::ErrorSound: ok = audio().playTrack(Config::ErrorTrack); break;
             default: handled = false; break;
         }
         if (handled) {
@@ -180,7 +147,6 @@ void DiagnosticController::command(Command cmd) {
         }
     }
     log_.log("[ERROR] invalid command or unavailable in this mode; type help");
-    signalError();
 }
 
 void BootMenu::begin() {

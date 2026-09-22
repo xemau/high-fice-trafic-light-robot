@@ -29,7 +29,6 @@ public:
     bool next() override;
     bool previous() override;
     AudioStatus status() const override { return status_; }
-    bool takeError() override;
 private:
     bool enqueue(uint8_t command, uint16_t parameter = 0);
     bool send(uint8_t command, uint16_t parameter = 0);
@@ -44,7 +43,6 @@ private:
     AudioStatus status_ = AudioStatus::Off;
     uint32_t startedAt_ = 0, lastSent_ = 0, lastByte_ = 0, queriedAt_ = 0;
     uint8_t initStep_ = 0;
-    uint16_t lastTrack_ = 0;
     bool awaitingStatus_ = false, pollingEnabled_ = true;
-    bool errorEvent_ = false, uartStarted_ = false;
+    bool uartStarted_ = false;
 };

@@ -16,6 +16,7 @@ public:
         : clock_(clock), sensor_(sensor), audio_(audio), lights_(lights), log_(log), settings_(settings) {}
     void begin();
     void update();
+    void seedRandom(uint32_t seed) { randomState_ = seed ? seed : 0x9e3779b9; }
     void simulateHighFive() { simulated_ = true; }
     RobotState state() const { return state_; }
     static const char* stateName(RobotState state);

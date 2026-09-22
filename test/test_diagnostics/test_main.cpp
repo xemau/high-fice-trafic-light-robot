@@ -29,8 +29,7 @@ void parser_valid_commands() {
         {"next", CommandType::Next, 0}, {"previous", CommandType::Previous, 0},
         {"highfive", CommandType::HighFive, 0}, {"simulate highfive", CommandType::HighFive, 0},
         {"status", CommandType::Status, 0}, {"reset", CommandType::Reset, 0}, {"help", CommandType::Help, 0},
-        {"retry", CommandType::Retry, 0}, {"1", CommandType::SelectMode, 1}, {"5", CommandType::SelectMode, 5},
-        {"boot", CommandType::BootSound, 0}, {"error", CommandType::ErrorSound, 0}
+        {"retry", CommandType::Retry, 0}, {"1", CommandType::SelectMode, 1}, {"5", CommandType::SelectMode, 5}
     };
     for (const auto& c : cases) {
         const auto command = parseCommand(c.text);
@@ -41,7 +40,8 @@ void parser_valid_commands() {
 void parser_rejects_malformed_input() {
     const char* invalid[] = {nullptr, "", " ", "red green", "play", "play -1", "play 0", "play 10000",
         "play 99999999999999999999999999999", "play 1x", "play 1 2", "volume 31", "volume -1", "volume +1",
-        "volume", "lights blue", "lights red green", "simulate press", "0", "6", "11", "wat", "RED", "red\n", "\x01"};
+        "volume", "lights blue", "lights red green", "simulate press", "boot", "error",
+        "0", "6", "11", "wat", "RED", "red\n", "\x01"};
     for (auto c : invalid) TEST_ASSERT_EQUAL_INT(CommandType::Invalid, parseCommand(c).type);
     std::string huge(200, 'a'); TEST_ASSERT_EQUAL_INT(CommandType::Invalid, parseCommand(huge.c_str()).type);
 }
@@ -200,8 +200,9 @@ void full_integration_with_real_core_and_fake_electrical_io() {
     clock.advance(1); diagnostics.update();
     TEST_ASSERT_EQUAL_INT(RobotState::Red, diagnostics.robotState());
     TEST_ASSERT_EQUAL(0x16, uart.tx.back()[3]);
+    const auto commandsAfterStop = uart.tx.size();
     clock.advance(Config::AudioCommandMs); diagnostics.update();
-    TEST_ASSERT_EQUAL(0x16, uart.tx.back()[3]);
+    TEST_ASSERT_EQUAL(commandsAfterStop, uart.tx.size());
     TEST_ASSERT_TRUE(outputs.frame[0].red);
     TEST_ASSERT_FALSE(outputs.frame[0].green); TEST_ASSERT_FALSE(outputs.frame[0].blue);
     for (std::size_t i = 1; i < outputs.frame.size(); ++i) {
@@ -217,38 +218,21 @@ void full_integration_with_real_core_and_fake_electrical_io() {
     TEST_ASSERT_EQUAL(0x12, uart.tx.back()[3]);
     TEST_ASSERT_EQUAL_INT(AudioStatus::Ready, audio.status());
 }
-void boot_sound_once_after_ready_and_diagnostic_system_commands() {
+void system_sounds_are_never_queued() {
     Rig r; r.diagnostics.begin(AppMode::Full); r.audio.state = AudioStatus::Starting;
     r.diagnostics.update(); TEST_ASSERT_EQUAL(0, r.audio.plays);
-    r.audio.state = AudioStatus::Ready; r.diagnostics.update();
-    TEST_ASSERT_EQUAL(Config::BootTrack, r.audio.track); TEST_ASSERT_EQUAL(1, r.audio.plays);
-    r.diagnostics.update(); TEST_ASSERT_EQUAL(1, r.audio.plays);
-    r.command("boot"); TEST_ASSERT_EQUAL(Config::BootTrack, r.audio.track);
-    r.command("error"); TEST_ASSERT_EQUAL(Config::ErrorTrack, r.audio.track);
-    Rig test; test.diagnostics.begin(AppMode::AudioTest); test.diagnostics.update(); TEST_ASSERT_EQUAL(0, test.audio.plays);
-    test.command("boot"); TEST_ASSERT_EQUAL(Config::BootTrack, test.audio.track);
-    test.command("error"); TEST_ASSERT_EQUAL(Config::ErrorTrack, test.audio.track);
+    r.audio.state = AudioStatus::Ready; r.diagnostics.update(); r.diagnostics.update();
+    r.command("boot"); r.command("error");
+    TEST_ASSERT_EQUAL(0, r.audio.plays);
+    TEST_ASSERT_TRUE(r.log.contains("invalid command"));
 }
-void error_cues_are_one_shot_and_unavailable_audio_does_not_recurse() {
+void failures_are_logged_without_audio_cues() {
     Rig r; r.lights.ok = false; r.diagnostics.begin(AppMode::Full); r.diagnostics.update();
-    TEST_ASSERT_EQUAL(Config::ErrorTrack, r.audio.track); TEST_ASSERT_EQUAL(1, r.audio.plays);
-    r.diagnostics.update(); TEST_ASSERT_EQUAL(1, r.audio.plays);
-    r.audio.error = true; r.diagnostics.update(); TEST_ASSERT_EQUAL(2, r.audio.plays);
-    r.diagnostics.update(); TEST_ASSERT_EQUAL(2, r.audio.plays);
-    r.command("invalid"); TEST_ASSERT_EQUAL(3, r.audio.plays);
-    r.audio.ok = false; r.audio.error = true; r.diagnostics.update(); TEST_ASSERT_TRUE(r.log.contains("error sound unavailable"));
-    r.audio.state = AudioStatus::Failed; r.audio.error = true;
-    const int played = r.audio.plays; r.diagnostics.update(); r.command("invalid");
-    TEST_ASSERT_EQUAL(played, r.audio.plays);
-    VirtualAudio virtualAudio; TEST_ASSERT_FALSE(virtualAudio.takeError());
-}
-void delayed_or_failed_boot_cue_does_not_interrupt_reward() {
-    Rig r; r.diagnostics.begin(AppMode::Full); r.audio.state = AudioStatus::Starting;
-    r.green(); r.command("highfive"); r.diagnostics.update();
-    TEST_ASSERT_EQUAL(1, r.audio.plays);
-    r.audio.state = AudioStatus::Ready; r.diagnostics.update(); TEST_ASSERT_EQUAL(1, r.audio.plays);
-    Rig unavailable; unavailable.diagnostics.begin(AppMode::Full); unavailable.audio.ok = false;
-    unavailable.diagnostics.update(); TEST_ASSERT_TRUE(unavailable.log.contains("boot sound unavailable"));
+    TEST_ASSERT_TRUE(r.log.contains("LEDs initialization failed"));
+    TEST_ASSERT_EQUAL(0, r.audio.plays);
+    r.command("invalid"); r.diagnostics.update();
+    TEST_ASSERT_TRUE(r.log.contains("invalid command"));
+    TEST_ASSERT_EQUAL(0, r.audio.plays);
 }
 int main() {
     UNITY_BEGIN(); RUN_TEST(parser_valid_commands); RUN_TEST(parser_rejects_malformed_input);
@@ -257,8 +241,7 @@ int main() {
     RUN_TEST(audio_mode_isolated_all_commands_and_errors); RUN_TEST(sensor_mode_isolated_changes_only);
     RUN_TEST(sequence_uses_no_physical_subsystems); RUN_TEST(full_failures_and_simulation_reset);
     RUN_TEST(virtual_audio_public_contract); RUN_TEST(full_integration_with_real_core_and_fake_electrical_io);
-    RUN_TEST(boot_sound_once_after_ready_and_diagnostic_system_commands);
-    RUN_TEST(error_cues_are_one_shot_and_unavailable_audio_does_not_recurse);
-    RUN_TEST(delayed_or_failed_boot_cue_does_not_interrupt_reward);
+    RUN_TEST(system_sounds_are_never_queued);
+    RUN_TEST(failures_are_logged_without_audio_cues);
     return UNITY_END();
 }

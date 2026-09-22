@@ -16,7 +16,7 @@ struct Application {
     TrafficLight lights{clock, ledOutputs};
     YX5200AudioPlayer audio{clock, uart, console};
     DiagnosticController diagnostics{clock, sensor, audio, lights, console};
-    BootMenu menu{clock, diagnostics, console};
+    LineBuffer line;
 };
 Application& app() {
     static Application instance;
@@ -25,9 +25,11 @@ Application& app() {
 }
 
 void setup() {
-    app().lights.seedAnimation(esp_random());
+    const uint32_t seed = esp_random();
+    app().lights.seedAnimation(seed);
+    app().diagnostics.seedRandom(esp_random() ^ (seed << 1));
     app().console.begin();
-    app().menu.begin();
+    app().diagnostics.begin(AppMode::Full);
 }
 
 void loop() {
@@ -35,8 +37,13 @@ void loop() {
     for (std::size_t i = 0; i < Config::IoBudget; ++i) {
         const int byte = instance.console.read();
         if (byte < 0) break;
-        instance.menu.input(static_cast<char>(byte));
+        const auto result = instance.line.push(static_cast<char>(byte));
+        if (result == LineResult::Rejected) {
+            instance.console.log("[ERROR] input line too long or contains invalid bytes");
+        } else if (result == LineResult::Complete) {
+            instance.diagnostics.command(parseCommand(instance.line.text()));
+        }
     }
-    instance.menu.update();
+    instance.diagnostics.update();
     instance.console.update();
 }

@@ -138,6 +138,16 @@ void reward_tracks_are_randomized_without_immediate_repeats() {
     }
     TEST_ASSERT_EQUAL((1u << Config::RewardTrackCount) - 1, seen);
 }
+void reward_seed_changes_the_first_track() {
+    unsigned seen = 0;
+    for (uint32_t seed = 1; seed <= 12; ++seed) {
+        Rig r;
+        r.robot.seedRandom(seed);
+        r.reward();
+        seen |= 1u << (r.audio.track - Config::RewardTrack);
+    }
+    TEST_ASSERT_EQUAL((1u << Config::RewardTrackCount) - 1, seen);
+}
 void physical_held_switch_requires_release_and_new_press() {
     FakeClock clock; FakeInput input; FakeAudio audio; FakeLights lights; FakeLog log;
     HighFiveSensor sensor(clock, input);
@@ -165,5 +175,6 @@ int main() {
     RUN_TEST(custom_settings_and_rollover);
     RUN_TEST(physical_held_switch_requires_release_and_new_press);
     RUN_TEST(reward_tracks_are_randomized_without_immediate_repeats);
+    RUN_TEST(reward_seed_changes_the_first_track);
     return UNITY_END();
 }
