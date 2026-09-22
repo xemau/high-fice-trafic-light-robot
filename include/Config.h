@@ -36,7 +36,7 @@ constexpr uint32_t SelectionMs = 5000;
 constexpr int DefaultVolume = 30;
 constexpr uint8_t DefaultEqualizer = 3; // YX5200: Normal=0, Pop=1, Rock=2, Jazz=3, Classic=4, Bass=5.
 constexpr uint16_t RewardTrack = 1;
-constexpr uint16_t RewardTrackCount = 150;
+constexpr uint16_t RewardTrackCount = 1000;
 constexpr int MaxVolume = 30;
 constexpr uint16_t MaxTrack = 9999;
 constexpr uint32_t AudioBootMs = 3000;
